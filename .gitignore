@@ -6,7 +6,11 @@ dist/
 project.private.config.json
 .research/
 reports/phone-preview.*
+reports/phone-preview-*
 cloudfunctions/api/index.js
 cloudfunctions/api/node_modules/
+cloudfunctions/getLoginTicket/index.js
+cloudfunctions/getLoginTicket/node_modules/
+**/tcb_custom_login*.json
 miniprogram/app.js
 miniprogram/pages/**/*.js

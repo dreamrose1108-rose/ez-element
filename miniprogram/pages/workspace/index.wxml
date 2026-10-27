@@ -1,18 +1,18 @@
 <view class="page">
   <view wx:if="{{demo}}" class="demo">本地开发演示 · 非真实账户与收款</view>
-  <view class="brand"><view><text class="brand-cn">元素领域</text><text class="brand-en">Ez Element / MOVE WITH PURPOSE</text></view><text class="badge">{{roleName}}</text></view>
+  <view class="brand"><view><text class="brand-cn">{{'FORM & FLOW'}}</text><text class="brand-en">MOVE WITH PURPOSE</text></view><text class="badge">{{roleName}}</text></view>
   <view class="roles" wx:if="{{roles.length > 1}}"><button wx:for="{{roles}}" wx:key="id" data-role="{{item.id}}" bindtap="switchRole" class="{{role === item.id ? 'active' : ''}}">{{item.name}}</button></view>
   <view class="error" wx:if="{{error}}">{{error}}<button bindtap="refresh" size="mini">重试加载</button></view>
   <view wx:if="{{busy}}" class="hint">正在处理，请稍候…</view>
   <view wx:if="{{!profile && !busy && !error}}" class="card">
-    <view class="title">加入元素领域</view><text class="muted">填写资料，由门店审核后开通预约。</text>
+    <view class="title">加入 {{'FORM & FLOW'}}</view><text class="muted">填写资料，由门店审核后开通预约。</text>
     <form bindsubmit="register"><input name="name" placeholder="姓名" maxlength="40"/><input name="phone" placeholder="手机号（用于门店联系）" type="number" maxlength="11"/><button form-type="submit" class="primary" disabled="{{busy}}">提交入会申请</button></form>
   </view>
   <view wx:elif="{{profile && profile.status !== 'active'}}" class="empty">{{profile.status === 'pending' ? '资料已提交，等待门店审核。' : '账户已停用，请联系门店处理已有预约。'}}</view>
   <block wx:elif="{{profile && profile.status === 'active'}}">
     <block wx:if="{{tab === 'home'}}">
       <view class="greeting">你好，{{profile.name}}<text class="muted">把时间留给更好的自己</text></view>
-      <view class="hero"><text class="eyebrow">EZ ELEMENT TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
+      <view class="hero"><text class="eyebrow">{{'FORM & FLOW'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
       <view class="metrics"><view><text class="number">{{totalAvailable}}</text><text>可用课时</text></view><view><text class="number">{{totalFrozen}}</text><text>已冻结</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
       <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
@@ -20,6 +20,7 @@
       <view class="card" wx:for="{{bookings}}" wx:key="id">
         <view class="row"><text class="title">{{item.title}}</text><text class="badge">{{item.statusName}}</text></view>
         <text class="schedule">{{item.schedule}}</text><text class="muted">{{role === 'student' ? '本次课时' : '学员 ' + item.memberName}} · {{item.cost}} 节</text>
+        <text wx:if="{{item.cancelReason}}" class="muted">停课原因：{{item.cancelReason}}</text>
         <button wx:if="{{role === 'student' && item.canCancel}}" class="secondary" data-id="{{item.id}}" bindtap="cancelBooking" disabled="{{busy}}">取消预约</button>
         <text class="muted" wx:if="{{role === 'student' && item.status === 'confirmed' && !item.canCancel}}">需要变更请联系门店</text>
         <view wx:if="{{role !== 'student' && item.canSettle}}" class="row actions"><button class="primary" data-id="{{item.id}}" data-outcome="attended" bindtap="settle" disabled="{{busy}}">确认到课</button><button class="secondary" data-id="{{item.id}}" data-outcome="absent" bindtap="settle" disabled="{{busy}}">标记爽约</button></view>
@@ -28,6 +29,7 @@
     <block wx:if="{{tab === 'schedule'}}">
       <view class="page-title">{{role === 'student' ? '为训练留个时间' : '一周课程安排'}}</view><text class="muted">{{role === 'student' ? '私教选时段，团课选已发布场次' : '按具体日期管理，已有预约的时段不可直接关闭'}}</text>
       <scroll-view scroll-x class="dates"><view class="date-row"><button wx:for="{{days}}" wx:key="key" class="date {{day === item.key ? 'selected' : ''}}" data-day="{{item.key}}" bindtap="chooseDay"><text>{{item.label}}</text><text>{{item.short}}</text></button></view></scroll-view>
+      <picker wx:if="{{role !== 'student'}}" mode="date" value="{{day}}" bindchange="chooseScheduleDate"><view class="picker">排课日期：{{day}} · 查看其他日期 ›</view></picker>
       <view class="segments" wx:if="{{role !== 'coach'}}"><button class="{{kind === 'private' ? 'selected' : ''}}" data-kind="private" bindtap="chooseKind">私教预约</button><button class="{{kind === 'group' ? 'selected' : ''}}" data-kind="group" bindtap="chooseKind">团课场次</button></view>
       <picker wx:if="{{role !== 'coach'}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">教练：{{coaches[coachIndex].name || '暂无教练'}} <text>更换 ›</text></view></picker>
       <view class="section">{{day}} · {{sessions.length}} 个已发布时段</view>
@@ -37,8 +39,16 @@
           <view class="row"><text class="time">{{item.startLabel}}</text><text class="badge">{{item.kindName}}</text></view><text class="muted">至 {{item.endLabel}}</text>
           <view class="title">{{item.title}}</view><text class="muted">{{item.coachName}} · {{item.roomId}}</text><text class="muted">{{item.cost}} 节课时 · 余 {{item.free}} / {{item.capacity}} 位</text>
           <button wx:if="{{role === 'student'}}" class="primary" disabled="{{!item.canBook || busy}}" data-id="{{item.id}}" bindtap="selectSession">{{item.canBook ? '选择时段' : '暂不可约'}}</button>
-          <button wx:elif="{{item.canClose}}" class="secondary" data-id="{{item.id}}" bindtap="closeSlot" disabled="{{busy}}">关闭空闲时段</button>
+          <view wx:elif="{{item.canClose}}" class="row actions"><button class="secondary edit-slot" data-id="{{item.id}}" bindtap="editSlot" disabled="{{busy}}">编辑时段</button><button class="secondary" data-id="{{item.id}}" bindtap="closeSlot" disabled="{{busy}}">关闭时段</button></view>
+          <button wx:if="{{item.canCancelSession}}" class="secondary cancel-session" data-id="{{item.id}}" bindtap="cancelSession" disabled="{{busy}}">整场停课 · 释放预约课时</button>
         </view>
+      </view>
+      <view wx:if="{{role !== 'student'}}" class="card">
+        <view class="title">复制一周私教排班</view>
+        <text class="muted">{{day}} 至 {{copyEnd}} · {{role === 'coach' ? profile.name : coaches[coachIndex].name}} · {{copyCount}} 个时段</text>
+        <text class="muted">目标：{{copyTarget}} 至 {{copyTargetEnd}}。保留时间、地点与课时，预约不会复制。</text>
+        <text wx:if="{{copyUnavailable}}" class="muted">排课记录较多，请逐日发布。</text>
+        <button class="secondary" bindtap="copyWeek" disabled="{{busy || !copyCount || copyCount > 35 || copyUnavailable}}">复制到下一周</button>
       </view>
       <view wx:if="{{role !== 'student'}}" class="card">
         <view class="title">{{role === 'coach' ? '新增当天可约时段' : '发布课程场次'}}</view><text class="muted">日期 {{day}} · {{role === 'coach' || kind === 'private' ? '一对一私教' : '多人团课'}}；起止时间使用 24 小时制</text>
@@ -57,3 +67,17 @@
   </block>
 </view>
 <view wx:if="{{selectedId}}" class="overlay"><view class="sheet"><view class="row"><text class="page-title">确认预约</text><button class="compact secondary" bindtap="dismiss">关闭</button></view><view class="title">{{selectedTitle}}</view><text class="schedule">{{selectedTime}}</text><picker wx:if="{{eligible.length}}" range="{{eligible}}" range-key="label" value="{{packageIndex}}" bindchange="choosePackage"><view class="picker">{{eligible[packageIndex].label}} ›</view></picker><text class="muted" wx:else>没有适用课包，请联系门店购课或延期。</text><view class="notice">本次冻结 {{selectedCost}} 节，开课前 {{selectedCancel}} 小时可自助取消。</view><button class="primary" bindtap="confirmBook" disabled="{{!eligible.length || busy}}">确认预约 · 冻结 {{selectedCost}} 节</button></view></view>
+
+<view wx:if="{{editing}}" class="overlay"><scroll-view scroll-y class="sheet edit-sheet">
+  <view class="row"><text class="page-title">编辑未预约时段</text><button class="compact secondary" bindtap="dismissEdit" disabled="{{busy}}">关闭</button></view>
+  <text class="muted">教练、课程类型和课时保持不变；有预约或时间冲突时无法保存。</text>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <picker mode="date" value="{{editing.day}}" bindchange="changeEditDate" disabled="{{busy}}"><view class="picker">上课日期：{{editing.day}} ›</view></picker>
+  <form bindsubmit="saveSlot">
+    <text class="muted">课程名称</text><input name="title" value="{{editing.title}}" maxlength="60" disabled="{{busy}}"/>
+    <text class="muted">开始 / 结束时间（24 小时制）</text><view class="row"><input name="start" value="{{editing.start}}" placeholder="09:00" disabled="{{busy}}"/><input name="end" value="{{editing.end}}" placeholder="10:00" disabled="{{busy}}"/></view>
+    <text class="muted">上课地点</text><input name="room" value="{{editing.room}}" maxlength="40" disabled="{{busy}}"/>
+    <block wx:if="{{editing.kind === 'group'}}"><text class="muted">人数上限</text><input name="capacity" type="number" value="{{editing.capacity}}" disabled="{{busy}}"/></block>
+    <button class="primary save-slot" form-type="submit" disabled="{{busy}}">保存修改</button>
+  </form>
+</scroll-view></view>

@@ -1,3 +1,3 @@
-// Accounts not provisioned yet. Demo calls a local development process;
-// build:production refuses to package demo mode or an empty environment.
-export const config = { mode: 'demo' as 'demo' | 'cloud', envId: '', demoUrl: 'http://10.200.78.135:4174/api' };
+// Environment ID verified in Tencent Cloud. Keep demo until the ticket endpoint,
+// login provider and database are configured and verified; never guess its URL.
+export const config = { mode: 'demo' as 'demo' | 'cloud', envId: 'everyday-rose-d0gihszbt1940f4d1', loginUrl: '', demoUrl: 'http://192.168.0.179:4174/api' };

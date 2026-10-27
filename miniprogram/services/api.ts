@@ -1,10 +1,11 @@
 import { config } from '../config';
+import { callCloud } from './cloudbase';
 
 export type Role = 'student' | 'coach' | 'admin';
 export interface Profile { id: string; name: string; roles: Role[]; status: string }
-export interface Session { id: string; kind: string; title: string; coachId: string; roomId: string; start: number; end: number; reserved: number; capacity: number; cost: number; status: string; cancelHours: number; cutoffMinutes: number }
+export interface Session { id: string; kind: string; title: string; coachId: string; roomId: string; start: number; end: number; reserved: number; capacity: number; cost: number; status: string; cancelHours: number; cutoffMinutes: number; cancelReason?: string }
 export interface Pack { id: string; memberId: string; kind: string; available: number; frozen: number; consumed: number; expiresAt: number; coachIds: string[] }
-export interface Booking { id: string; sessionId: string; memberId: string; status: string; cost: number; packageId: string }
+export interface Booking { id: string; sessionId: string; memberId: string; status: string; cost: number; packageId: string; cancelReason?: string }
 export interface Dashboard { profile: Profile | null; sessions?: Session[]; packages?: Pack[]; bookings?: Booking[]; inbox?: { id: string; title: string; at: number }[]; users?: Profile[]; roster?: { id: string; name: string }[]; coaches?: { id: string; name: string }[]; ledger?: { id: string; type: string; at: number; delta: { available: number; frozen: number; consumed: number } }[] }
 interface Reply<T> { ok: boolean; data: T; message?: string; code?: string }
 const requests = new Map<string, string>();
@@ -20,12 +21,11 @@ export async function api<T>(role: Role, command: Record<string, unknown>): Prom
     });
   } else {
     if (!config.envId) throw new Error('云环境尚未配置');
-    const r = await wx.cloud.callFunction({ name: 'api', data: payload });
-    response = r.result as unknown as Reply<T>;
+    response = await callCloud(payload) as Reply<T>;
   }
   if (!response || typeof response.ok !== 'boolean') throw new Error('服务返回格式异常');
   if (!response.ok) {
-    if (response.code !== 'INTERNAL') requests.delete(key);
+    if (!['INTERNAL', 'UNAUTHENTICATED', 'NOT_CONFIGURED'].includes(response.code || '')) requests.delete(key);
     throw new Error(response.message || '操作失败，请重试');
   }
   requests.delete(key);

@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GymService, userKey } from '../server/service';
-import { MemoryStore } from '../server/memory-store';
+import { fixtureStore } from './helpers/store';
 import { BusinessError, Session } from '../server/model';
 
 async function fixture() {
-  const store = new MemoryStore(); let now = Date.parse('2026-11-01T08:00:00+08:00');
+  const store = await fixtureStore(); let now = Date.parse('2026-11-01T08:00:00+08:00');
   const service = new GymService(store, () => now);
   await store.transaction(async tx => {
     for (const [name, roles] of [['admin', ['admin']], ['coach', ['coach']], ['coach2', ['coach']], ['student', ['student']], ['student2', ['student']]] as const) {
@@ -131,4 +131,172 @@ test('学员及教练响应不包含线下收款和他人课包', async () => {
   assert.ok('purchases' in result); assert.deepEqual(result.purchases, []);
   assert.ok('packages' in result); assert.deepEqual(result.packages, []);
   assert.ok('users' in result); assert.deepEqual(result.users, []);
+});
+
+test('复制七天私教排班保留课程属性，不复制预约；重复请求不重复创建', async () => {
+  const f = await fixture(); const pack = await f.purchase();
+  const a = await f.publish({ exclusive: true, roomId: 'room-a', cost: 2 });
+  const b = await f.publish({ start: f.now() + 3 * 86400000, end: f.now() + 3 * 86400000 + 3600000 });
+  await f.call('student', 'book', { sessionId: a.id, packageId: pack.id });
+  const command = { action: 'copyWeek', requestId: 'copy-week-repeat', sessionIds: [a.id, b.id], sourceStart: Date.parse('2026-11-03T00:00:00+08:00') };
+  const first = await f.service.execute('coach', command);
+  assert.deepEqual(await f.service.execute('coach', command), first);
+  const sessions = await f.get('sessions'); assert.equal(sessions.length, 4);
+  const original = sessions.find(s => s.id === a.id)!;
+  const copied = sessions.find(s => s.start === original.start + 7 * 86400000)!;
+  assert.equal(copied.reserved, 0); assert.equal(copied.status, 'open');
+  for (const field of ['kind', 'title', 'coachId', 'roomId', 'exclusive', 'capacity', 'cost'] as const) assert.equal(copied[field], original[field]);
+  assert.equal((await f.get('bookings')).length, 1);
+  assert.equal((await f.get('memberPackages'))[0]!.frozen, 2);
+  await rejectsCode(f.call('coach', 'copyWeek', { sessionIds: [a.id, b.id], sourceStart: command.sourceStart }), 'CONFLICT');
+  assert.equal((await f.get('sessions')).length, 4);
+});
+
+test('整周复制后续场次冲突时回滚全部新场次和锁；修正冲突后可重试', async () => {
+  const f = await fixture(); const a = await f.publish();
+  const b = await f.publish({ start: f.now() + 3 * 86400000, end: f.now() + 3 * 86400000 + 3600000 });
+  const conflict = await f.publish({ start: f.now() + 10 * 86400000, end: f.now() + 10 * 86400000 + 3600000, kind: 'group', capacity: 10 });
+  const before = await f.get('scheduleLocks');
+  const command = { action: 'copyWeek', requestId: 'copy-week-conflict', sessionIds: [a.id, b.id], sourceStart: Date.parse('2026-11-03T00:00:00+08:00') };
+  await rejectsCode(f.service.execute('coach', command), 'CONFLICT');
+  assert.equal((await f.get('sessions')).length, 3);
+  assert.deepEqual(await f.get('scheduleLocks'), before);
+  await f.call('admin', 'closeSlot', { sessionId: conflict.id });
+  await f.service.execute('coach', command);
+  assert.equal((await f.get('sessions')).length, 5);
+});
+
+test('复制排班拒绝越权、重复来源、跨周及关闭场次', async () => {
+  const f = await fixture(); const a = await f.publish();
+  const input = { sessionIds: [a.id], sourceStart: Date.parse('2026-11-03T00:00:00+08:00') };
+  await rejectsCode(f.call('student', 'copyWeek', input), 'FORBIDDEN');
+  await rejectsCode(f.call('coach2', 'copyWeek', input), 'FORBIDDEN');
+  await rejectsCode(f.call('coach', 'copyWeek', { ...input, sessionIds: [a.id, a.id] }), 'INPUT');
+  await rejectsCode(f.call('coach', 'copyWeek', { ...input, sourceStart: input.sourceStart + 86400000 }), 'TIME');
+  await rejectsCode(f.call('coach', 'copyWeek', { ...input, sourceStart: input.sourceStart + 1 }), 'TIME');
+  await f.call('coach', 'closeSlot', { sessionId: a.id });
+  await rejectsCode(f.call('coach', 'copyWeek', input), 'STATE');
+  assert.equal((await f.get('sessions')).length, 1);
+});
+
+test('整周复制仍校验目标时间和独占场地冲突', async () => {
+  const f = await fixture(); const a = await f.publish({ exclusive: true, roomId: 'only-room' });
+  await f.publish({ coachId: userKey('coach2'), exclusive: true, roomId: 'only-room', start: f.now() + 9 * 86400000, end: f.now() + 9 * 86400000 + 3600000 });
+  const input = { sessionIds: [a.id], sourceStart: Date.parse('2026-11-03T00:00:00+08:00') };
+  await rejectsCode(f.call('admin', 'copyWeek', input), 'CONFLICT');
+  f.advance(10 * 86400000);
+  await rejectsCode(f.call('admin', 'copyWeek', input), 'TIME');
+  assert.equal((await f.get('sessions')).length, 2);
+});
+
+test('编辑空闲时段迁移日程锁，保留取消历史并支持幂等重试', async () => {
+  const f = await fixture(); const a = await f.publish({ exclusive: true, roomId: 'old-room' }); const p = await f.purchase();
+  const booking = await f.call('student', 'book', { sessionId: a.id, packageId: p.id });
+  await f.call('student', 'cancel', { bookingId: booking.id });
+  const original = (await f.get('sessions'))[0]!;
+  const command = { action: 'editSlot', requestId: 'edit-slot-repeat', sessionId: a.id, title: '新时段', roomId: 'new-room', start: original.start + 86400000, end: original.end + 86400000, capacity: 1 };
+  const edited = await f.service.execute('coach', command) as { id: string };
+  assert.deepEqual(await f.service.execute('coach', command), edited);
+  const sessions = await f.get('sessions'); assert.equal(sessions.length, 2);
+  assert.equal(sessions.find(s => s.id === a.id)!.status, 'closed');
+  assert.equal(sessions.find(s => s.id === a.id)!.start, original.start);
+  const next = sessions.find(s => s.id === edited.id)!;
+  assert.equal(next.start, command.start); assert.equal(next.cost, original.cost); assert.equal(next.exclusive, true);
+  assert.equal((await f.get('bookings'))[0]!.sessionId, a.id);
+  await f.publish({ exclusive: true, roomId: 'old-room' }); // Original time was released.
+  await rejectsCode(f.call('student', 'book', { sessionId: a.id, packageId: p.id }), 'NOT_FOUND');
+  await f.call('student', 'book', { sessionId: edited.id, packageId: p.id });
+});
+
+test('编辑冲突完整回滚；拒绝越权、已有预约、关闭及已开始的场次', async () => {
+  const f = await fixture(); const a = await f.publish({ exclusive: true, roomId: 'old-room' });
+  const input = { sessionId: a.id, title: '调整', roomId: 'new-room', start: f.now() + 3 * 86400000, end: f.now() + 3 * 86400000 + 3600000, capacity: 1 };
+  await f.publish({ coachId: userKey('coach2'), exclusive: true, roomId: 'new-room', start: input.start, end: input.end });
+  const before = await f.get('scheduleLocks');
+  await rejectsCode(f.call('coach', 'editSlot', input), 'CONFLICT');
+  assert.deepEqual(await f.get('scheduleLocks'), before);
+  assert.equal((await f.get('sessions')).find(s => s.id === a.id)!.status, 'open');
+  await rejectsCode(f.call('student', 'editSlot', input), 'FORBIDDEN');
+  await rejectsCode(f.call('coach2', 'editSlot', input), 'FORBIDDEN');
+  const p = await f.purchase(); await f.call('student', 'book', { sessionId: a.id, packageId: p.id });
+  await rejectsCode(f.call('admin', 'editSlot', input), 'STATE');
+  const closed = await f.publish({ start: input.start + 86400000, end: input.end + 86400000 });
+  await f.call('coach', 'closeSlot', { sessionId: closed.id });
+  await rejectsCode(f.call('coach', 'editSlot', { ...input, sessionId: closed.id }), 'STATE');
+  const past = await f.publish({ start: f.now() + 3600000, end: f.now() + 7200000 });
+  f.advance(7200000);
+  await rejectsCode(f.call('coach', 'editSlot', { ...input, sessionId: past.id }), 'STATE');
+});
+
+test('团课仅管理员可编辑；私教容量及时间约束不被编辑绕过', async () => {
+  const f = await fixture(); const a = await f.publish({ kind: 'group', capacity: 10 });
+  const input = { sessionId: a.id, title: '调整团课', roomId: 'group-room', start: f.now() + 3 * 86400000, end: f.now() + 3 * 86400000 + 3600000, capacity: 8 };
+  await rejectsCode(f.call('coach', 'editSlot', input), 'FORBIDDEN');
+  const result = await f.call('admin', 'editSlot', input);
+  assert.equal((await f.get('sessions')).find(s => s.id === result.id)!.capacity, 8);
+  const p = await f.publish();
+  await rejectsCode(f.call('coach', 'editSlot', { ...input, sessionId: p.id }), 'CAPACITY');
+  await rejectsCode(f.call('coach', 'editSlot', { ...input, sessionId: p.id, capacity: 1, end: input.start }), 'TIME');
+});
+
+test('管理员整场停课释放所有课时和日程锁，保留原因及通知，重复提交不重复退款', async () => {
+  const f = await fixture();
+  const s = await f.publish({ kind: 'group', capacity: 10, exclusive: true, roomId: 'studio' });
+  for (const who of ['student', 'student2']) {
+    const p = await f.purchase(who, { kind: 'group', coachIds: [] });
+    await f.call(who, 'book', { sessionId: s.id, packageId: p.id });
+  }
+  f.advance(2 * 86400000 - 3600000); // Within the student self-cancellation cutoff.
+  const booking = (await f.get('bookings')).find(b => b.memberId === userKey('student'))!;
+  await rejectsCode(f.call('student', 'cancel', { bookingId: booking.id }), 'LATE_CANCEL');
+  const command = { action: 'cancelSession', requestId: 'cancel-whole-class', sessionId: s.id, reason: '教练临时请假' };
+  await f.service.execute('admin', command); await f.service.execute('admin', command);
+  await f.call('admin', 'cancelSession', { sessionId: s.id, reason: '重复操作' });
+  const session = (await f.get('sessions'))[0]!;
+  assert.equal(session.status, 'closed'); assert.equal(session.reserved, 0); assert.equal(session.cancelReason, '教练临时请假');
+  assert.ok((await f.get('bookings')).every(b => b.status === 'cancelled'));
+  assert.ok((await f.get('memberPackages')).every(p => p.available === 10 && p.frozen === 0));
+  assert.equal((await f.get('creditLedger')).filter(l => l.type === 'release').length, 2);
+  assert.equal((await f.get('inbox')).filter(m => m.title.includes('教练临时请假')).length, 4);
+  assert.ok((await f.get('scheduleLocks')).every(l => l.entries.length === 0));
+  await f.publish({ kind: 'group', capacity: 10, exclusive: true, roomId: 'studio', start: session.start, end: session.end });
+});
+
+test('停课拒绝教练和学员，已开始场次及空原因；名单不完整时不释放部分课时', async () => {
+  const f = await fixture(); const s = await f.publish(); const p = await f.purchase();
+  await f.call('student', 'book', { sessionId: s.id, packageId: p.id });
+  const input = { sessionId: s.id, reason: '场地维护' };
+  await rejectsCode(f.call('coach', 'cancelSession', input), 'FORBIDDEN');
+  await rejectsCode(f.call('student', 'cancelSession', input), 'FORBIDDEN');
+  await assert.rejects(f.call('admin', 'cancelSession', { ...input, reason: '  ' }));
+  const originalList = f.store.list.bind(f.store);
+  f.store.list = async (table, filter, limit) => {
+    const rows = await originalList(table, filter, limit);
+    return table === 'bookings' ? rows.slice(0, 0) : rows;
+  };
+  await rejectsCode(f.call('admin', 'cancelSession', input), 'ROSTER_CHANGED');
+  f.store.list = originalList;
+  assert.equal((await f.get('sessions'))[0]!.status, 'open');
+  assert.equal((await f.get('memberPackages'))[0]!.frozen, 1);
+  f.advance(2 * 86400000);
+  await rejectsCode(f.call('admin', 'cancelSession', input), 'STATE');
+});
+
+test('停课遇到后续学员课包异常时回滚前面已处理的预约、流水与通知', async () => {
+  const f = await fixture(); const s = await f.publish({ kind: 'group', capacity: 10 });
+  const a = await f.purchase('student', { kind: 'group', coachIds: [] });
+  const b = await f.purchase('student2', { kind: 'group', coachIds: [] });
+  await f.call('student', 'book', { sessionId: s.id, packageId: a.id });
+  await f.call('student2', 'book', { sessionId: s.id, packageId: b.id });
+  await f.store.transaction(async tx => {
+    const pack = (await tx.get('memberPackages', b.id))!;
+    pack.available = pack.total; pack.frozen = 0; await tx.put('memberPackages', pack);
+  });
+  const ledgerBefore = await f.get('creditLedger'); const inboxBefore = await f.get('inbox');
+  await rejectsCode(f.call('admin', 'cancelSession', { sessionId: s.id, reason: '临时停课' }), 'BALANCE');
+  assert.deepEqual(await f.get('creditLedger'), ledgerBefore);
+  assert.deepEqual(await f.get('inbox'), inboxBefore);
+  assert.ok((await f.get('bookings')).every(b => b.status === 'confirmed'));
+  assert.equal((await f.get('memberPackages')).find(p => p.id === a.id)!.frozen, 1);
+  assert.equal((await f.get('sessions'))[0]!.reserved, 2);
 });

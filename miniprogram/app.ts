@@ -1,2 +1,2 @@
-import { config } from './config';
-App({ onLaunch() { if (config.mode === 'cloud' && config.envId) wx.cloud.init({ env: config.envId, traceUser: true }); } });
+// Independent CloudBase authenticates lazily before the first API request.
+App({});

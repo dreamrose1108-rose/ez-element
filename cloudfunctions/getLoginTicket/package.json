@@ -1,0 +1,9 @@
+{
+  "name": "ez-element-getloginticket",
+  "version": "0.1.0",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "3.18.7",
+    "zod": "4.6.7"
+  }
+}

@@ -11,13 +11,13 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
     for (const [n, roles] of [['student', ['student']], ['coach', ['coach']], ['admin', ['admin']]] as const) await tx.put('users', { id: userKey(n), name: n, phone: '13800000000', roles: [...roles], status: 'active' });
   });
   await service.execute('admin', { action: 'purchase', requestId: 'test-purchase', memberId: userKey('student'), kind: 'private', coachIds: [userKey('coach')], credits: 10, expiresAt: Date.now() + 90 * 86400000, amountFen: 10000, method: 'cash', note: 'test' });
-  interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; renderData(): void; publish(e: object): void; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
+  interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; publish(e: object): void; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
   let page: PageHarness | undefined;
-  const bundle = buildSync({ entryPoints: ['miniprogram/pages/workspace/index.ts'], bundle: true, write: false, platform: 'neutral', format: 'cjs' }).outputFiles[0]!.text;
+  const bundle = buildSync({ entryPoints: ['miniprogram/pages/workspace/index.ts'], bundle: true, write: false, platform: 'neutral', mainFields: ['main', 'module'], format: 'cjs' }).outputFiles[0]!.text;
   vm.runInNewContext(bundle, {
     console, module: { exports: {} }, exports: {},
     Page(p: PageHarness) { page = p; p.setData = value => Object.assign(p.data, value); },
-    wx: { showToast() {}, request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
+    wx: { showToast() {}, showModal: async () => ({ confirm: true, content: '场地维护测试' }), request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
       service.execute(opts.data.role, opts.data.command).then(data => opts.success({ statusCode: 200, data: { ok: true, data } }), e => opts.success({ statusCode: 200, data: { ok: false, message: e.message } }));
     } },
   });
@@ -40,4 +40,31 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   p.setData({ role: 'student' }); await p.refresh();
   await p.mutate({ action: 'cancel', bookingId: bookings[0]!.id }, '已取消');
   assert.equal(p.data.totalFrozen, 0); assert.equal(p.data.totalAvailable, 10);
+  p.setData({ role: 'coach' }); await p.refresh();
+  assert.equal(p.data.copyCount, 1);
+  await p.copyWeek(); assert.equal(p.data.error, '');
+  const targetDay = String(p.data.copyTarget);
+  p.chooseScheduleDate({ detail: { value: targetDay } });
+  slots = p.data.sessions as { id: string; startLabel: string }[];
+  assert.equal(slots.length, 1); assert.equal(slots[0]!.startLabel, '09:00');
+  assert.notEqual(slots[0]!.id, sid);
+  p.editSlot({ currentTarget: { dataset: { id: slots[0]!.id } } });
+  assert.ok(p.data.editing);
+  await p.saveSlot({ detail: { value: { title: '修改后私教', start: '11:00', end: '12:00', room: '新训练区' } } });
+  assert.equal(p.data.error, ''); assert.equal(p.data.editing, null);
+  slots = p.data.sessions as { id: string; startLabel: string }[];
+  assert.equal(slots.length, 1); assert.equal(slots[0]!.startLabel, '11:00');
+  assert.equal((p.data.bookings as object[]).length, 1, '复制不能创建新的学员预约');
+  await p.copyWeek(); assert.equal(p.data.error, '');
+  p.setData({ role: 'student', day }); await p.refresh();
+  p.selectSession({ currentTarget: { dataset: { id: sid } } }); p.confirmBook(); await idle();
+  assert.equal(p.data.totalFrozen, 1);
+  p.setData({ role: 'admin' }); await p.refresh();
+  await p.cancelSession({ currentTarget: { dataset: { id: sid } } });
+  assert.equal(p.data.error, '');
+  p.setData({ role: 'student' }); await p.refresh();
+  assert.equal(p.data.totalFrozen, 0); assert.equal(p.data.totalAvailable, 10);
+  const cancelled = p.data.bookings as { statusName: string; cancelReason: string }[];
+  assert.ok(cancelled.some(b => b.statusName === '门店停课' && b.cancelReason === '场地维护测试'));
+  assert.ok(cancelled.some(b => b.statusName === '已取消' && !b.cancelReason), '原来的学员自行取消记录不应被改写');
 });

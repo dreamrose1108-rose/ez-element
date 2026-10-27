@@ -1,6 +1,6 @@
 {
   "pages": ["pages/workspace/index"],
-  "window": { "navigationBarTitleText": "元素领域 · Ez Element", "navigationBarBackgroundColor": "#f4f4f3", "navigationBarTextStyle": "black", "backgroundColor": "#f4f4f3" },
+  "window": { "navigationBarTitleText": "FORM & FLOW", "navigationBarBackgroundColor": "#f4f4f3", "navigationBarTextStyle": "black", "backgroundColor": "#f4f4f3" },
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

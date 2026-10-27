@@ -40,8 +40,15 @@ export class GymService {
     const command = commandSchema.parse(raw);
     const actorId = userKey(openid);
     if (command.action === 'dashboard') return this.dashboard(actorId);
-    const now = this.clock();
+    // Fetch candidates outside the transaction, then revalidate the complete
+    // active roster against the session counter inside it before releasing credit.
+    let cancellationIds: string[] = [];
+    if (command.action === 'cancelSession') {
+      await this.store.transaction(async tx => role(await user(tx, actorId), 'admin'));
+      cancellationIds = (await this.store.list('bookings', { sessionId: command.sessionId, status: 'confirmed' }, 100)).map(b => b.id);
+    }
     return this.store.transaction(async tx => {
+      const now = this.clock();
       if (command.action === 'register') {
         const existing = await tx.get('users', actorId);
         // Never overwrite roles/status through a profile payload or phone matching.
@@ -58,13 +65,13 @@ export class GymService {
         return prior.result;
       }
       const rules = await tx.get('settings', 'store') || defaultRules;
-      const result = await this.mutate(tx, actor, command, requestKey, now, rules);
+      const result = await this.mutate(tx, actor, command, requestKey, now, rules, cancellationIds);
       await tx.put('requestKeys', { id: requestKey, fingerprint, result });
       await tx.put('auditLogs', { id: requestKey, actorId, action: command.action, targetId: result.id, at: now });
       return result;
     });
   }
-  private async mutate(tx: Tx, actor: User, cmd: Exclude<Command, { action: 'register' | 'dashboard' }>, operation: string, now: number, rules: Rules): Promise<{ id: string }> {
+  private async mutate(tx: Tx, actor: User, cmd: Exclude<Command, { action: 'register' | 'dashboard' }>, operation: string, now: number, rules: Rules, cancellationIds: string[] = []): Promise<{ id: string }> {
     if (cmd.action === 'approve') {
       role(actor, 'admin');
       const target = await tx.get('users', cmd.userId);
@@ -90,6 +97,69 @@ export class GymService {
       const owners = [`coach:${s.coachId}`, ...(s.exclusive ? [`room:${s.roomId}`] : [])].sort();
       for (const owner of owners) await schedule(tx, owner, s, s.id, true);
       await tx.put('sessions', s); return { id: s.id };
+    }
+    if (cmd.action === 'editSlot') {
+      const source = await tx.get('sessions', cmd.sessionId);
+      requireThat(source, 'NOT_FOUND', '场次不存在');
+      requireThat(hasRole(actor, 'admin') || (hasRole(actor, 'coach') && source.coachId === actor.id && source.kind === 'private'), 'FORBIDDEN', '无权编辑该时段');
+      requireThat(source.status === 'open' && source.reserved === 0 && source.start > now, 'STATE', '仅可编辑未开始且没有预约的开放时段，请刷新后重试');
+      // Keep the original session for cancelled booking history. Replacement and
+      // lock movement share one transaction, so failed edits leave it untouched.
+      source.status = 'closed';
+      for (const owner of [`coach:${source.coachId}`, ...(source.exclusive ? [`room:${source.roomId}`] : [])].sort()) await schedule(tx, owner, source, source.id, false);
+      await tx.put('sessions', source);
+      return this.mutate(tx, actor, { action: 'publish', requestId: cmd.requestId,
+        kind: source.kind, coachId: source.coachId, exclusive: source.exclusive, cost: source.cost,
+        title: cmd.title, roomId: cmd.roomId, start: cmd.start, end: cmd.end, capacity: cmd.capacity,
+      }, operation, now, rules);
+    }
+    if (cmd.action === 'copyWeek') {
+      requireThat(hasRole(actor, 'admin') || hasRole(actor, 'coach'), 'FORBIDDEN', '仅教练或管理员可复制排班');
+      requireThat(new Set(cmd.sessionIds).size === cmd.sessionIds.length, 'INPUT', '复制列表包含重复时段');
+      requireThat(cmd.sourceStart === Date.parse(`${dayKey(cmd.sourceStart)}T00:00:00+08:00`), 'TIME', '请选择有效的起始日期');
+      const week = 7 * 86400000;
+      let coachId = '';
+      for (const id of cmd.sessionIds) {
+        const source = await tx.get('sessions', id);
+        requireThat(source && source.status === 'open' && source.kind === 'private', 'STATE', '只能复制开放的私教时段');
+        requireThat(source.start >= cmd.sourceStart && source.start < cmd.sourceStart + week, 'TIME', '来源时段必须在所选七天内');
+        requireThat(!coachId || coachId === source.coachId, 'SCOPE', '每次只能复制一位教练的排班');
+        coachId = source.coachId;
+        // Reuse publish authorization and schedule locks inside this same transaction.
+        // A conflict anywhere rolls back the entire batch; reservations are never copied.
+        await this.mutate(tx, actor, { action: 'publish', requestId: cmd.requestId,
+          kind: source.kind, title: source.title, coachId, roomId: source.roomId,
+          exclusive: source.exclusive, start: source.start + week, end: source.end + week,
+          capacity: source.capacity, cost: source.cost,
+        }, key(operation, source.id), now, rules);
+      }
+      return { id: operation };
+    }
+    if (cmd.action === 'cancelSession') {
+      role(actor, 'admin');
+      const s = await tx.get('sessions', cmd.sessionId);
+      requireThat(s, 'NOT_FOUND', '场次不存在');
+      if (s.status === 'closed' && s.cancelledAt) return { id: s.id };
+      requireThat(s.status === 'open' && s.start > now, 'STATE', '仅可停课尚未开始的开放场次');
+      requireThat(new Set(cancellationIds).size === cancellationIds.length && s.reserved === cancellationIds.length, 'ROSTER_CHANGED', '预约名单已变化，请刷新后重新停课');
+      const bookings: Booking[] = [];
+      for (const id of cancellationIds) {
+        const b = await tx.get('bookings', id);
+        requireThat(b && b.sessionId === s.id && b.status === 'confirmed', 'ROSTER_CHANGED', '预约名单已变化，请刷新后重新停课');
+        bookings.push(b);
+      }
+      for (const b of bookings) {
+        const p = await tx.get('memberPackages', b.packageId);
+        requireThat(p && p.memberId === b.memberId, 'DATA_INTEGRITY', '课包记录异常，停课未执行，请联系管理员');
+        await schedule(tx, `member:${b.memberId}`, s, b.id, false);
+        await ledger(tx, p, actor.id, 'release', b.id, now, b.cost, -b.cost, 0);
+        b.status = 'cancelled'; b.cancelReason = cmd.reason; await tx.put('bookings', b);
+        await notify(tx, b, s, `门店停课：${cmd.reason}`, now);
+      }
+      for (const owner of [`coach:${s.coachId}`, ...(s.exclusive ? [`room:${s.roomId}`] : [])].sort()) await schedule(tx, owner, s, s.id, false);
+      s.reserved = 0; s.status = 'closed'; s.cancelReason = cmd.reason; s.cancelledAt = now; s.cancelledBy = actor.id;
+      await tx.put('sessions', s);
+      return { id: s.id };
     }
     if (cmd.action === 'closeSlot') {
       const s = await tx.get('sessions', cmd.sessionId);

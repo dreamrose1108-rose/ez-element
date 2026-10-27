@@ -1,1 +1,3 @@
 /* Shared yellow/gray theme lives in app.wxss. */
+
+.edit-sheet{max-height:88vh;}

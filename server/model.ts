@@ -5,9 +5,9 @@ export const kindSchema = z.enum(['private', 'group']);
 export type Role = z.infer<typeof roleSchema>;
 export type Kind = z.infer<typeof kindSchema>;
 export interface User { id: string; name: string; phone: string; roles: Role[]; status: 'pending' | 'active' | 'disabled' }
-export interface Session { id: string; kind: Kind; title: string; coachId: string; roomId: string; exclusive: boolean; start: number; end: number; capacity: number; reserved: number; cost: number; status: 'open' | 'closed'; cancelHours: number; cutoffMinutes: number }
+export interface Session { id: string; kind: Kind; title: string; coachId: string; roomId: string; exclusive: boolean; start: number; end: number; capacity: number; reserved: number; cost: number; status: 'open' | 'closed'; cancelHours: number; cutoffMinutes: number; cancelReason?: string; cancelledAt?: number; cancelledBy?: string }
 export interface Package { id: string; memberId: string; kind: Kind; coachIds: string[]; available: number; frozen: number; consumed: number; total: number; expiresAt: number }
-export interface Booking { id: string; sessionId: string; memberId: string; packageId: string; cost: number; cancelHours: number; status: 'confirmed' | 'cancelled' | 'attended' | 'absent'; createdAt: number }
+export interface Booking { id: string; sessionId: string; memberId: string; packageId: string; cost: number; cancelHours: number; status: 'confirmed' | 'cancelled' | 'attended' | 'absent'; createdAt: number; cancelReason?: string }
 export interface Schedule { id: string; entries: { ref: string; start: number; end: number }[] }
 export interface Ledger { id: string; packageId: string; memberId: string; actorId: string; type: 'purchase' | 'freeze' | 'release' | 'consume'; reference: string; delta: { available: number; frozen: number; consumed: number }; at: number }
 export interface Purchase { id: string; memberId: string; packageId: string; amountFen: number; method: 'cash' | 'transfer'; note: string; actorId: string; at: number }
@@ -26,6 +26,9 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('approve'), requestId, userId: id }).strict(),
   z.object({ action: z.literal('purchase'), requestId, memberId: id, kind: kindSchema, coachIds: z.array(id).max(20), credits: count, expiresAt: time, amountFen: z.number().int().min(0).max(100000000), method: z.enum(['cash', 'transfer']), note: z.string().trim().min(1).max(200) }).strict(),
   z.object({ action: z.literal('publish'), requestId, kind: kindSchema, title: z.string().trim().min(1).max(60), coachId: id, roomId: z.string().trim().min(1).max(40), exclusive: z.boolean(), start: time, end: time, capacity: z.number().int().min(1).max(100), cost: z.number().int().min(1).max(100) }).strict(),
+  z.object({ action: z.literal('editSlot'), requestId, sessionId: id, title: z.string().trim().min(1).max(60), roomId: z.string().trim().min(1).max(40), start: time, end: time, capacity: z.number().int().min(1).max(100) }).strict(),
+  z.object({ action: z.literal('copyWeek'), requestId, sessionIds: z.array(id).min(1).max(35), sourceStart: time }).strict(),
+  z.object({ action: z.literal('cancelSession'), requestId, sessionId: id, reason: z.string().trim().min(1).max(100) }).strict(),
   z.object({ action: z.literal('closeSlot'), requestId, sessionId: id }).strict(),
   z.object({ action: z.literal('book'), requestId, sessionId: id, packageId: id }).strict(),
   z.object({ action: z.literal('cancel'), requestId, bookingId: id }).strict(),
