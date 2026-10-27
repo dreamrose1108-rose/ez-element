@@ -16,7 +16,7 @@ export async function api<T>(role: Role, command: Record<string, unknown>): Prom
   let response: Reply<T>;
   if (config.mode === 'demo') {
     response = await new Promise<Reply<T>>((resolve, reject) => {
-      wx.request<Reply<T>>({ url: config.demoUrl, method: 'POST', data: { role, command: payload }, success: r => { if (r.statusCode === 200) resolve(r.data); else reject(new Error('演示服务不可用')); }, fail: () => reject(new Error('请先在电脑启动 npm run dev:demo；本地演示仅支持开发工具')) });
+      wx.request<Reply<T>>({ url: config.demoUrl, method: 'POST', data: { role, command: payload }, success: r => { if (r.statusCode === 200) resolve(r.data); else reject(new Error('演示服务不可用')); }, fail: e => reject(new Error(`无法连接演示服务。请确认手机能访问电脑所在局域网，且电脑演示服务正在运行。请求详情：${e.errMsg}`)) });
     });
   } else {
     if (!config.envId) throw new Error('云环境尚未配置');

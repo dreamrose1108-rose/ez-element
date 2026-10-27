@@ -6,6 +6,7 @@ import { BusinessError, dayKey } from './model';
 
 const store = new MemoryStore();
 const service = new GymService(store);
+const demoHost = process.env.EZ_DEMO_HOST || '127.0.0.1';
 async function seed() {
   await store.transaction(async tx => {
     for (const [openid, name, roles] of [['demo-student', '陈晓', ['student']], ['demo-coach', '林教练', ['coach']], ['demo-admin', '门店管理员', ['admin']]] as const) {
@@ -26,6 +27,7 @@ async function start() {
   await seed();
   createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (req.method === 'GET' && req.url === '/health') { res.end(JSON.stringify({ ok: true, mode: 'demo' })); return; }
     if (req.method !== 'POST' || req.url !== '/api') { res.writeHead(404); res.end('{}'); return; }
     let body = '';
     try {
@@ -37,6 +39,6 @@ async function start() {
     } catch (e) {
       res.end(JSON.stringify({ ok: false, code: e instanceof BusinessError ? e.code : 'INVALID_INPUT', message: e instanceof BusinessError ? e.message : '演示请求格式错误' }));
     }
-  }).listen(4174, '127.0.0.1', () => console.log('LOCAL DEMO ONLY: http://127.0.0.1:4174/api · 数据仅在内存，重启重置'));
+  }).listen(4174, demoHost, () => console.log(`LOCAL DEMO ONLY: http://${demoHost}:4174/api · 数据仅在内存，重启重置`));
 }
 start().catch(() => { console.error('DEMO_START_FAILED'); process.exitCode = 1; });

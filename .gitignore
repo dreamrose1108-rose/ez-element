@@ -5,6 +5,7 @@ dist/
 !.env.example
 project.private.config.json
 .research/
+reports/phone-preview.*
 cloudfunctions/api/index.js
 cloudfunctions/api/node_modules/
 miniprogram/app.js
