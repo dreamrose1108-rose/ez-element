@@ -1,0 +1,15 @@
+{
+  "projectname": "Ez Element",
+  "description": "元素领域单店课程预约小程序",
+  "appid": "wx6a97e50fec245050",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": false
+  },
+  "condition": {},
+  "libVersion": "3.17.4"
+}

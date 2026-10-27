@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+project.private.config.json
+.research/
+cloudfunctions/api/index.js
+cloudfunctions/api/node_modules/
+miniprogram/app.js
+miniprogram/pages/**/*.js

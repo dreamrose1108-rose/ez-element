@@ -1,0 +1,1 @@
+{ "desc": "内部预约与账户页暂不参与搜索索引", "rules": [{ "action": "disallow", "page": "*" }] }

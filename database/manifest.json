@@ -1,0 +1,13 @@
+{
+  "status": "planned-not-provisioned",
+  "clientSecurityRule": { "read": false, "write": false },
+  "collections": ["users", "sessions", "memberPackages", "bookings", "scheduleLocks", "creditLedger", "purchaseRecords", "inbox", "requestKeys", "auditLogs", "settings"],
+  "indexes": {
+    "users": [["status"]],
+    "sessions": [["start"], ["coachId", "start"]],
+    "memberPackages": [["memberId", "expiresAt"]],
+    "bookings": [["memberId"], ["sessionId"]],
+    "inbox": [["userId", "at"]],
+    "creditLedger": [["memberId", "at"], ["packageId", "at"]]
+  }
+}
