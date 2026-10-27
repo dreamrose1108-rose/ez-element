@@ -2,14 +2,14 @@
 
 单店、私教与团课、线下收款的原生微信小程序。主色黄色与灰色。
 
-当前为 **开发中的首个业务增量**，包含原生页面、后端事务业务及本地联动演示，不是已上线的运营系统。个人小程序账号已注册；用户已选购 PostgreSQL 云环境，后端已改为 PostgreSQL。已核实微信登录关联、启用自定义登录并部署两个云函数；共享数据库已通过云函数的官方 `ExecutePGSql` 通道连通，登录函数仍缺 AppSecret 和自定义登录签名私钥。
+当前为 **开发中的首个云端测试版本**，不是已上线的运营系统。个人小程序账号、PostgreSQL 云环境、自定义登录、登录 HTTP 网关和两个云函数均已接通；客户端已切换 cloud 模式，并生成云端预览二维码。云数据库尚无正式门店数据，首位管理员初始化及真机业务闭环仍需完成。
 
 ## 目录
 
 - `prototype/`：已确认的浏览器原型，仍可在 4173 端口查看。
 - `miniprogram/`：原生 WXML / WXSS / TypeScript，小程序正式实现的起点。
 - `server/`：业务服务、PostgreSQL 数据库适配器、可信微信身份云函数入口；旧 CloudStore 仅保留用于历史适配器回归。
-- `cloudfunctions/api/` 与 `cloudfunctions/getLoginTicket/`：业务及登录云函数构建产物；已部署测试环境的 `$LATEST`，未配置完敏感凭据。
+- `cloudfunctions/api/` 与 `cloudfunctions/getLoginTicket/`：业务及登录云函数构建产物；已部署测试环境的 `$LATEST`。
 - `tests/`：业务规则、数据适配器、页面控制器联动测试。
 - `database/postgres/`：当前 PostgreSQL 建表、JSONB 查询索引、RLS、直连角色权限及共享集群事务桥脚本。旧 `database/manifest.json` 仅适用于历史 NoSQL 方案，不在 PG 环境执行。
 - `docs/PostgreSQL接入.md`：当前测试环境接入步骤和服务端连接配置。
@@ -27,7 +27,7 @@ npm run dev:demo
 
 手机联调时可显式指定监听地址：`$env:EZ_DEMO_HOST='192.168.0.179'; npm run dev:demo`。本次客户端演示地址已设为 `http://192.168.0.179:4174/api`；默认启动仍为回环地址，需与客户端配置保持一致。换网络后应重新确认电脑地址、修改配置并构建、重新生成二维码。手机应接入可访问电脑的局域网，先用手机浏览器打开 `http://192.168.0.179:4174/health`，返回 `{"ok":true,"mode":"demo"}` 表示连通。此服务只有虚构演示数据和演示角色切换，不用于正式运营或公网部署。二维码仅本地保留，真机通过情况需实际扫码确认。
 
-项目已切换至用户注册的个人小程序 FORM & FLOW（AppID `wx6d8fac347b122572`），客户端 `config.ts` 保持 `demo` 模式，已填正确云环境 ID，但未切换云调用。原接口测试号为上一阶段使用。WXML/WXSS 官方编译通过；Nightly 模拟器已验证三端渲染、七天选日期、私教预约冻结与教练名单联动。基础库固定为 3.17.4，具体证据见验证记录与 `reports/` 截图。
+项目已切换至用户注册的个人小程序 FORM & FLOW（AppID `wx6d8fac347b122572`）。客户端使用 cloud 模式，登录入口为 CloudBase 默认 HTTPS 域名的 `/login-ticket`；业务函数仅接受已认证 SDK 调用。WXML/WXSS 官方编译通过；Nightly 模拟器已验证本地三端联动，云端预览已生成。基础库固定为 3.17.4，具体证据见验证记录。
 
 页面演示：学员选择日期/教练/时段 → 选择适用课包并预约；切到教练可看同一笔预约；管理员可创建团课、审核与线下开卡。结课按钮只在真实系统时间到达课程结束后出现；没有绕过时间规则的演示后门。
 
@@ -35,11 +35,11 @@ npm run dev:demo
 
 1. 已核实上海 PG 环境与准确 AppID 登录关联，独立 SDK 登录代码已完成；部署步骤见 `docs/PostgreSQL接入.md`。
 2. 11 张业务表和共享集群事务桥已经初始化。运行时不建表，客户端不能直接读写业务表；`api` 使用云函数临时身份调用 `ExecutePGSql`，无需保存数据库密码。
-3. 自定义登录已启用，`getLoginTicket` 和新版 `api` 已部署。环境 ID 与 AppID 已配置；还需由账号所有者在控制台注入 AppSecret 和签名私钥。
-4. 凭据完成后再配置登录 HTTPS 入口及限流；业务 API 仅接受已认证 SDK 调用。完成云端联调后填 `loginUrl`、切换 cloud 模式并配置微信域名白名单。
-5. `npm run build:production` 拒绝游客 AppID、demo 模式、空环境、非 HTTPS 登录地址或关闭域名校验；通过后生成新预览码。
+3. 自定义登录已启用，`getLoginTicket` 和新版 `api` 已部署；登录函数四项环境变量已配置，签名私钥在云端生成和轮换。
+4. `/login-ticket` HTTP 网关仅绑定登录函数；客户端使用 CloudBase 的 `环境ID.service.tcloudbase.com` 标准别名。跨域、路径透传和网关身份认证关闭，函数只接受 POST 和微信一次性 code。体验版不提供自定义网关限频，仍受套餐总 QPS 限制。
+5. `loginUrl`、cloud 模式和域名校验已启用；`npm run build:production` 通过并生成云端预览码。
 6. 门店负责人先从小程序提交资料；由环境所有者核对本人后，在 `ez_users.data` 给该用户赋予 `admin` 和 `active`。教练同理由可信管理操作赋权；当前不开放客户端自助提权或凭手机号接管用户。邀请绑定界面留待后续实现。
-7. 完成登录、云端业务事务并发、权限和真机测试后才能进入试运营。
+7. 完成首位管理员初始化、登录、云端业务事务并发、权限和真机测试后才能进入试运营。
 
 ## 已实现的关键约束
 
@@ -62,7 +62,6 @@ npm run dev:demo
 
 ## 开发工具
 
-已安装官方 Nightly `2.02.2610212`，签名有效。路径：
-`C:\Users\zoumengwei\AppData\Local\Programs\WeChatDevToolsNightly`
+当前家中 Mac 已安装官方 Nightly `2.02.2610272`，路径为 `/Applications/wechatwebdevtools.app`。
 
 自动化接口：该目录内 `wechatide.cmd`，配套技能 `0.3.14`。首次使用需用户登录并开启开发工具的服务端口，随后允许 Codex 连接。不要向仓库写入访问令牌。

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { buildSync } from 'esbuild';
+import { build } from 'esbuild';
 import { GymService, userKey } from '../server/service';
 import { MemoryStore } from '../server/memory-store';
 
@@ -13,7 +13,17 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   await service.execute('admin', { action: 'purchase', requestId: 'test-purchase', memberId: userKey('student'), kind: 'private', coachIds: [userKey('coach')], credits: 10, expiresAt: Date.now() + 90 * 86400000, amountFen: 10000, method: 'cash', note: 'test' });
   interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; publish(e: object): void; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
   let page: PageHarness | undefined;
-  const bundle = buildSync({ entryPoints: ['miniprogram/pages/workspace/index.ts'], bundle: true, write: false, platform: 'neutral', mainFields: ['main', 'module'], format: 'cjs' }).outputFiles[0]!.text;
+  const buildResult = await build({
+    entryPoints: ['miniprogram/pages/workspace/index.ts'], bundle: true, write: false,
+    platform: 'neutral', mainFields: ['main', 'module'], format: 'cjs',
+    plugins: [{ name: 'demo-config', setup(builder) {
+      builder.onLoad({ filter: /miniprogram\/config\.ts$/ }, () => ({
+        contents: "export const config = { mode: 'demo', envId: '', loginUrl: '', demoUrl: 'http://demo.test/api' };",
+        loader: 'ts',
+      }));
+    } }],
+  });
+  const bundle = buildResult.outputFiles[0]!.text;
   vm.runInNewContext(bundle, {
     console, module: { exports: {} }, exports: {},
     Page(p: PageHarness) { page = p; p.setData = value => Object.assign(p.data, value); },

@@ -10,7 +10,7 @@
 
 SDK 使用小程序专用入口和微信适配器，由构建脚本打包，无需手工执行开发者工具 npm 构建。并发页面共享一次登录；鉴权过期最多刷新一次。预约等修改在网络结果未知时保留原请求 ID，避免重复扣课。
 
-客户端保持 demo 模式。`getLoginTicket` 和 `api` 已部署为 Node.js 20.19 普通云函数。当前免费共享实例没有 PostgreSQL 内外网直连地址；`api` 已改用云函数临时身份调用官方 `ExecutePGSql`，不需要保存数据库密码。登录函数还缺 AppSecret 和自定义登录签名凭据，所以尚未创建公网登录网关。
+客户端已切换 cloud 模式。`getLoginTicket` 和 `api` 已部署为 Node.js 20.19 普通云函数。当前免费共享实例没有 PostgreSQL 内外网直连地址；`api` 使用云函数临时身份调用官方 `ExecutePGSql`，不保存数据库密码。登录凭据已配置，默认 HTTPS 网关的 `/login-ticket` 已绑定登录函数；客户端使用同一路由的 `环境ID.service.tcloudbase.com` 标准别名。
 
 ## 已改好的代码
 
@@ -23,7 +23,7 @@ SDK 使用小程序专用入口和微信适配器，由构建脚本打包，无�
 ## 环境关联与账号
 
 1. 使用控制台已核实的环境 ID `everyday-rose-d0gihszbt1940f4d1`；准确 AppID 登录关联和云函数临时身份的 PostgreSQL 调用均已验证。
-2. 现有微信登录关联已核实，自定义登录已启用。还需下载当前环境的签名凭据并注入登录云函数。私钥不发送到聊天、不放进仓库。
+2. 现有微信登录关联已核实，自定义登录已启用。签名凭据由一次性云函数程序在云端创建并直接写回登录函数；最终私钥不落盘、不进入仓库。
 3. 已通过云端 SQL 编辑器执行与 `database/postgres/001_schema.sql` 等效的建表脚本，并核验 11 张表、每表 2 个索引、RLS 开启且策略数为 0。随后执行 `003_manager_runtime.sql`，创建版本表及原子写入函数。未执行仅供可直连实例使用的 `002_runtime_permissions.sql`。
 4. 当前体验版的数据库角色页面显示“新建角色”为禁用，配置页也没有内网或公网地址，因此不创建 `ez_api`。升级为可直连实例时再使用 `002_runtime_permissions.sql`，不要把匿名客户端角色设成管理员。
 5. 表启用 RLS，没有匿名或普通已登录客户端策略。`ExecutePGSql` 属于服务端管理通道，细粒度鉴权必须在云函数中完成；不得把 SQL、管理 SDK 或云函数临时凭据暴露给客户端。
@@ -41,9 +41,9 @@ SDK 使用小程序专用入口和微信适配器，由构建脚本打包，无�
 
 `api` 仅配置环境 ID，通过已登录 SDK 调用，不开启匿名业务 HTTP 网关。
 
-另部署 `cloudfunctions/getLoginTicket`，仅该函数配置 `EZ_ENV_ID`、`EZ_APP_ID`、`EZ_WX_APP_SECRET`、`EZ_TCB_LOGIN_CREDENTIALS`（完整签名凭据 JSON，env_id 必须匹配）。AppSecret 和私钥由所有者在控制台直接配置，不放入客户端。登录入口接收 HTTP POST JSON `{code}`，不接受客户端指定身份；在 HTTP 网关配置限流后才开放该登录入口。
+另部署 `cloudfunctions/getLoginTicket`，仅该函数配置 `EZ_ENV_ID`、`EZ_APP_ID`、`EZ_WX_APP_SECRET`、`EZ_TCB_LOGIN_CREDENTIALS`（完整签名凭据 JSON，env_id 必须匹配）。AppSecret 和私钥不放入客户端。`/login-ticket` 接收 HTTP POST JSON `{code}`，不接受客户端指定身份；GET、空请求和无效 code 已分别验证为 405、400、401。体验版不支持自定义网关限频，仍受套餐总 QPS 限制。
 
-确认身份认证、数据库连接、表权限及两个函数联调成功后，再填写客户端 HTTPS `loginUrl`、`envId`，将 `mode` 切为 `cloud`，配置实际登录入口及 SDK 请求域名的微信白名单并开启 `urlCheck`。运行 `npm run build:production` 后重新生成预览码。生产构建会拒绝 demo 模式、空环境、非 HTTPS 登录地址和关闭域名校验。仅修改配置不会创建云资源。
+客户端 HTTPS `loginUrl`、`envId` 和 cloud 模式已经配置，`urlCheck` 已开启。`npm run build:production` 与云端预览生成成功。生产构建会拒绝 demo 模式、空环境、非 HTTPS 登录地址和关闭域名校验。
 
 ## 验证与限制
 

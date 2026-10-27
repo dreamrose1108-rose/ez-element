@@ -7,6 +7,7 @@ project.private.config.json
 .research/
 reports/phone-preview.*
 reports/phone-preview-*
+reports/mobile-test/
 cloudfunctions/api/index.js
 cloudfunctions/api/node_modules/
 cloudfunctions/getLoginTicket/index.js

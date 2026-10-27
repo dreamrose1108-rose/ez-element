@@ -1,3 +1,6 @@
-// Environment ID verified in Tencent Cloud. Keep demo until the ticket endpoint,
-// login provider and database are configured and verified; never guess its URL.
-export const config = { mode: 'demo' as 'demo' | 'cloud', envId: 'everyday-rose-d0gihszbt1940f4d1', loginUrl: '', demoUrl: 'http://192.168.0.179:4174/api' };
+export const config = {
+  mode: 'cloud' as 'demo' | 'cloud',
+  envId: 'everyday-rose-d0gihszbt1940f4d1',
+  loginUrl: 'https://everyday-rose-d0gihszbt1940f4d1.service.tcloudbase.com/login-ticket',
+  demoUrl: 'http://192.168.0.179:4174/api',
+};

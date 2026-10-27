@@ -43,7 +43,9 @@ export function loginHandler(deps: LoginDeps) {
 export async function exchangeWechatCode(code: string, settings: LoginSettings): Promise<unknown> {
   const url = new URL('https://api.weixin.qq.com/sns/jscode2session');
   url.search = new URLSearchParams({ appid: settings.appid, secret: settings.secret, js_code: code, grant_type: 'authorization_code' }).toString();
-  const response = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: 'error' });
+  // The trial CloudBase plan fixes event functions at a 3-second timeout.
+  // Leave enough time for the handler to sign and return the custom ticket.
+  const response = await fetch(url, { signal: AbortSignal.timeout(2200), redirect: 'error' });
   if (!response.ok) throw new Error('Wechat login unavailable');
   return response.json();
 }

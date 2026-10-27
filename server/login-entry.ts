@@ -17,9 +17,9 @@ export const main = loginHandler({
   exchange: exchangeWechatCode,
   ticket(identity) {
     const { env, credentials } = configured();
-    const options = {
-      refresh: 3600000, expire: Date.now() + 86400000, allowInsecureKeySizes: false,
-    };
+    // CloudBase currently issues 1024-bit RSA custom-login keys. Its Node SDK
+    // enables compatibility for those provider-managed keys by default.
+    const options = { refresh: 3600000, expire: Date.now() + 86400000 };
     return cloudbase.init({ env: env.EZ_ENV_ID, credentials }).auth().createTicket(identity, options);
   },
 });
