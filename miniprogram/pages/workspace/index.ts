@@ -20,7 +20,8 @@ Page({
     navItems: navigation.student, todayClasses: 0, unsettledCount: 0, coachRoster: [] as { id: string; name: string }[],
     days: Array.from({ length: 7 }, (_, i) => { const key = dayKey(Date.now() + i * 86400000); return { key, short: key.slice(5), label: i === 0 ? '今天' : ['日', '一', '二', '三', '四', '五', '六'][new Date(`${key}T12:00:00+08:00`).getUTCDay()] }; }),
     day: dayKey(Date.now()), kind: 'private', coachIndex: 0, coaches: [] as { id: string; name: string }[],
-    publishStart: '', publishEnd: '', dragging: false, scheduleSlots: [] as { key: string; index: number; startLabel: string; endLabel: string; displayTime: string; durationLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean; visible: boolean; height: number }[],
+    publishStart: '', publishEnd: '', dragging: false, scheduleTimes: Array.from({ length: 28 }, (_, index) => ({ key: index, label: `${String(8 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}` })), scheduleSlots: [] as { key: string; day: string; index: number; startLabel: string; endLabel: string; displayTime: string; durationLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean; visible: boolean; span: number }[],
+    weekScheduleDays: [] as { key: string; label: string; short: string; slots: { key: string; day: string; index: number; startLabel: string; endLabel: string; displayTime: string; durationLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean; visible: boolean; span: number }[] }[],
     sessions: [] as object[], bookings: [] as object[], packs: [] as object[], messages: [] as object[], ledger: [] as object[], pending: [] as object[],
     users: [] as { id: string; name: string }[], memberIndex: 0, purchaseKindIndex: 0, kindNames: ['私教', '团课'],
     staffMembers: [] as { id: string; name: string; shortId: string; isCoach: boolean }[],
@@ -52,26 +53,34 @@ Page({
   renderData() {
     const now = Date.now(); const all = snapshot.sessions || []; const profile = snapshot.profile;
     const coaches = snapshot.coaches || []; const coach = coaches[this.data.coachIndex];
-    const sessions = all.filter(s => dayKey(s.start) === this.data.day && s.status === 'open' && (this.data.role === 'student' ? s.kind === this.data.kind && (s.kind === 'group' || !coach || s.coachId === coach.id) : this.data.role === 'coach' ? s.coachId === profile?.id : true)).sort((a, b) => a.start - b.start).map(s => ({ ...s, startLabel: time(s.start), endLabel: time(s.end), coachName: coaches.find(c => c.id === s.coachId)?.name || '教练', kindName: s.kind === 'private' ? '私教' : '团课', free: s.capacity - s.reserved, canBook: s.reserved < s.capacity && s.start - now >= s.cutoffMinutes * 60000, canCancelSession: this.data.role === 'admin' && s.start > now, canClose: s.reserved === 0 && s.start > now && (this.data.role === 'admin' || s.kind === 'private') }));
     const sourceStart = Date.parse(`${this.data.day}T00:00:00+08:00`);
+    const weeklyPrivate = this.data.role !== 'student' && this.data.kind !== 'group';
+    const weekKeys = Array.from({ length: 7 }, (_, i) => dayKey(sourceStart + i * 86400000));
+    const sessions = all.filter(s => (weeklyPrivate ? weekKeys.includes(dayKey(s.start)) && s.kind === 'private' : dayKey(s.start) === this.data.day) && s.status === 'open' && (this.data.role === 'student' ? s.kind === this.data.kind && (s.kind === 'group' || !coach || s.coachId === coach.id) : this.data.role === 'coach' ? s.coachId === profile?.id : true)).sort((a, b) => a.start - b.start).map(s => ({ ...s, dayLabel: dayKey(s.start), startLabel: time(s.start), endLabel: time(s.end), coachName: coaches.find(c => c.id === s.coachId)?.name || '教练', kindName: s.kind === 'private' ? '私教' : '团课', free: s.capacity - s.reserved, canBook: s.reserved < s.capacity && s.start - now >= s.cutoffMinutes * 60000, canCancelSession: this.data.role === 'admin' && s.start > now, canClose: s.reserved === 0 && s.start > now && (this.data.role === 'admin' || s.kind === 'private') }));
     const scheduleCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
-    const rawScheduleSlots = this.data.role === 'student' || this.data.kind === 'group' ? [] : Array.from({ length: 28 }, (_, index) => {
-      const start = sourceStart + 8 * 3600000 + index * 1800000; const end = start + 1800000;
-      const session = all.find(s => s.coachId === scheduleCoach && (s.status === 'open' || s.status === 'rest') && s.start < end && start < s.end);
-      const state = !session ? 'free' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
-      const stateName = ({ free: '可选', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '可选';
-      return { key: `${this.data.day}-${index}`, index, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: session?.id || '', sessionStart: session?.start || start, sessionEnd: session?.end || end, start, end, disabled: start <= now || state === 'booked', selected: false };
+    const weekScheduleDays = !weeklyPrivate ? [] : weekKeys.map((key, dayIndex) => {
+      const dayStart = Date.parse(`${key}T00:00:00+08:00`);
+      const raw = Array.from({ length: 28 }, (_, slotIndex) => {
+        const index = dayIndex * 28 + slotIndex; const start = dayStart + 8 * 3600000 + slotIndex * 1800000; const end = start + 1800000;
+        const session = all.find(s => s.coachId === scheduleCoach && (s.status === 'open' || s.status === 'rest') && s.start < end && start < s.end);
+        const state = !session ? 'free' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
+        const stateName = ({ free: '可选', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '可选';
+        return { key: `${key}-${slotIndex}`, day: key, index, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: session?.id || '', sessionStart: session?.start || start, sessionEnd: session?.end || end, start, end, disabled: start <= now || state === 'booked', selected: false };
+      });
+      const firstIndexBySession = new Map<string, number>();
+      raw.forEach(slot => { if (slot.sessionId && !firstIndexBySession.has(slot.sessionId)) firstIndexBySession.set(slot.sessionId, slot.index); });
+      const slots = raw.map(slot => {
+        const span = slot.sessionId ? Math.max(1, Math.round((slot.sessionEnd - slot.sessionStart) / 1800000)) : 1;
+        const minutes = span * 30; const durationLabel = minutes < 60 ? `${minutes}分` : minutes % 60 ? `${Math.floor(minutes / 60)}时${minutes % 60}分` : `${minutes / 60}小时`;
+        return { ...slot, visible: !slot.sessionId || firstIndexBySession.get(slot.sessionId) === slot.index, displayTime: slot.sessionId ? `${time(slot.sessionStart)}–${time(slot.sessionEnd)}` : slot.startLabel, durationLabel: slot.sessionId ? durationLabel : '30分', span };
+      });
+      const date = new Date(`${key}T12:00:00+08:00`); const weekday = ['日', '一', '二', '三', '四', '五', '六'][date.getUTCDay()];
+      return { key, label: `周${weekday}`, short: key.slice(5), slots };
     });
-    const firstIndexBySession = new Map<string, number>();
-    rawScheduleSlots.forEach(slot => { if (slot.sessionId && !firstIndexBySession.has(slot.sessionId)) firstIndexBySession.set(slot.sessionId, slot.index); });
-    const scheduleSlots = rawScheduleSlots.map(slot => {
-      const span = slot.sessionId ? Math.max(1, Math.round((slot.sessionEnd - slot.sessionStart) / 1800000)) : 1;
-      const minutes = span * 30; const durationLabel = minutes < 60 ? `${minutes}分钟` : minutes % 60 ? `${Math.floor(minutes / 60)}小时${minutes % 60}分钟` : `${minutes / 60}小时`;
-      return { ...slot, visible: !slot.sessionId || firstIndexBySession.get(slot.sessionId) === slot.index, displayTime: slot.sessionId ? `${time(slot.sessionStart)}–${time(slot.sessionEnd)}` : slot.startLabel, durationLabel: slot.sessionId ? durationLabel : '30分钟', height: span * 102 - 10 };
-    });
+    const scheduleSlots = weekScheduleDays.flatMap(item => item.slots);
     const copyCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
     const copySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && s.start >= sourceStart && s.start < sourceStart + 7 * 86400000);
-    this.setData({ scheduleSlots, copyCount: copySlots.length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
+    this.setData({ scheduleSlots, weekScheduleDays, copyCount: copySlots.length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
     const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
     const rosterIds = new Set(bookings.map(b => b.memberId));
     this.setData({ todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
@@ -121,7 +130,7 @@ Page({
     const direction = index >= dragAnchor ? 1 : -1; let next = dragAnchor;
     while (next !== index) {
       const candidate = next + direction; const size = Math.abs(candidate - dragAnchor) + 1; const slot = this.data.scheduleSlots[candidate];
-      if (!slot || slot.state !== 'free' || slot.disabled || size > 8) break;
+      if (!slot || slot.day !== this.data.scheduleSlots[dragAnchor]?.day || slot.state !== 'free' || slot.disabled || size > 8) break;
       next = candidate;
     }
     dragCurrent = next; const low = Math.min(dragAnchor, dragCurrent), high = Math.max(dragAnchor, dragCurrent);

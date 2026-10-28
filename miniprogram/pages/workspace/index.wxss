@@ -28,13 +28,24 @@
 .slot-legend .scheduled{background:#fff0a8;color:#6a5200;}
 .slot-legend .booked{background:#252629;color:#f5cf38;}
 .slot-legend .rest{background:#dfe4e7;color:#495057;}
-.schedule-slot-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10rpx;margin-bottom:18rpx;touch-action:none;}
-.schedule-block{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:92rpx;padding:10rpx 4rpx;border:2rpx solid transparent;border-radius:14rpx;line-height:1.15;text-align:center;box-sizing:border-box;user-select:none;}
+.week-timeline{display:flex;gap:8rpx;margin-bottom:18rpx;touch-action:none;}
+.week-labels{flex:0 0 88rpx;}
+.week-label-head,.week-day-label{display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;border-radius:10rpx;font-weight:800;}
+.week-label-head{height:58rpx;margin-bottom:6rpx;background:#252629;color:#f5cf38;font-size:19rpx;}
+.week-day-label{height:86rpx;margin-bottom:6rpx;background:#252629;color:#f5cf38;font-size:19rpx;}
+.week-day-label text:last-child{font-size:16rpx;color:#fff;margin-top:3rpx;}
+.week-time-scroll{flex:1;min-width:0;white-space:nowrap;}
+.week-time-canvas{width:2460rpx;}
+.week-time-head,.week-day-slots{display:grid;grid-template-columns:repeat(28,84rpx);gap:4rpx;}
+.week-time-head{height:58rpx;margin-bottom:6rpx;align-items:center;}
+.week-time-head text{font-size:18rpx;font-weight:800;text-align:center;color:#5e6063;}
+.week-day-slots{height:86rpx;margin-bottom:6rpx;grid-auto-flow:column;}
+.schedule-block{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;height:86rpx;padding:6rpx 4rpx;border:2rpx solid transparent;border-radius:9rpx;line-height:1.1;text-align:center;box-sizing:border-box;user-select:none;overflow:hidden;}
 .schedule-block.free{background:#f1f1ef;color:#55585b;border-color:#dededb;}
 .schedule-block.scheduled{background:#fff4bd;color:#4d410c;border-color:#f5cf38;}
 .schedule-block.booked{background:#252629;color:#f5cf38;border-color:#252629;}
 .schedule-block.rest{background:#e1e6e8;color:#454b50;border-color:#c9d0d4;}
 .schedule-block.selected{background:#f5cf38;color:#252629;border-color:#252629;transform:scale(.97);}
 .schedule-block.disabled{opacity:.5;}
-.slot-time{font-size:28rpx;font-weight:800;}
-.slot-state{font-size:19rpx;font-weight:700;margin-top:6rpx;}
+.slot-time{max-width:100%;font-size:19rpx;font-weight:800;white-space:normal;}
+.slot-state{font-size:16rpx;font-weight:700;margin-top:5rpx;}

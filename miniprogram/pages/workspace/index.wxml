@@ -33,19 +33,27 @@
     </block>
     <block wx:if="{{tab === 'schedule'}}">
       <view class="page-title">{{role === 'student' ? '为训练留个时间' : '一周课程安排'}}</view><text class="muted">{{role === 'student' ? '私教选时段，团课选已发布场次' : '按具体日期管理，已有预约的时段不可直接关闭'}}</text>
-      <scroll-view scroll-x class="dates"><view class="date-row"><button wx:for="{{days}}" wx:key="key" class="date {{day === item.key ? 'selected' : ''}}" data-day="{{item.key}}" bindtap="chooseDay"><text>{{item.label}}</text><text>{{item.short}}</text></button></view></scroll-view>
-      <picker wx:if="{{role !== 'student'}}" mode="date" value="{{day}}" bindchange="chooseScheduleDate"><view class="picker">排课日期：{{day}} · 查看其他日期 ›</view></picker>
+      <scroll-view wx:if="{{role === 'student' || kind === 'group'}}" scroll-x class="dates"><view class="date-row"><button wx:for="{{days}}" wx:key="key" class="date {{day === item.key ? 'selected' : ''}}" data-day="{{item.key}}" bindtap="chooseDay"><text>{{item.label}}</text><text>{{item.short}}</text></button></view></scroll-view>
+      <picker wx:if="{{role !== 'student' && kind === 'group'}}" mode="date" value="{{day}}" bindchange="chooseScheduleDate"><view class="picker">排课日期：{{day}} · 查看其他日期 ›</view></picker>
       <view class="segments" wx:if="{{role !== 'coach'}}"><button class="{{kind === 'private' ? 'selected' : ''}}" data-kind="private" bindtap="chooseKind">私教预约</button><button class="{{kind === 'group' ? 'selected' : ''}}" data-kind="group" bindtap="chooseKind">团课场次</button></view>
       <picker wx:if="{{role !== 'coach'}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">教练：{{coaches[coachIndex].name || '暂无教练'}} <text>更换 ›</text></view></picker>
       <view wx:if="{{role !== 'student' && kind !== 'group'}}" class="card slot-board">
-        <view class="row"><view><view class="title">拖动选择时间段</view><text class="muted">{{day}} · 每格 30 分钟，最长 4 小时</text></view><text class="badge">08:00–22:00</text></view>
+        <view class="row"><view><view class="title">一周拖拽排班</view><text class="muted">{{day}} 起连续 7 天 · 每格 30 分钟</text></view><text class="badge">08:00–22:00</text></view>
         <view class="slot-legend"><text class="free">可选</text><text class="scheduled">已排课</text><text class="booked">已约</text><text class="rest">休息</text></view>
-        <view class="schedule-slot-grid">
-          <view wx:for="{{scheduleSlots}}" wx:key="key" wx:if="{{item.visible}}" class="schedule-block {{item.state}} {{item.disabled ? 'disabled' : ''}} {{item.selected ? 'selected' : ''}}" style="min-height:{{item.height}}rpx" data-index="{{item.index}}" bindtouchstart="startScheduleDrag" catchtouchmove="moveScheduleDrag" bindtouchend="endScheduleDrag" bindtouchcancel="cancelScheduleDrag">
-            <text class="slot-time">{{item.displayTime}}</text><text class="slot-state">{{item.stateName}} · {{item.durationLabel}}</text>
-          </view>
+        <view class="week-timeline">
+          <view class="week-labels"><view class="week-label-head">日期</view><view wx:for="{{weekScheduleDays}}" wx:key="key" class="week-day-label"><text>{{item.label}}</text><text>{{item.short}}</text></view></view>
+          <scroll-view scroll-x enhanced show-scrollbar class="week-time-scroll">
+            <view class="week-time-canvas">
+              <view class="week-time-head"><text wx:for="{{scheduleTimes}}" wx:key="key">{{item.label}}</text></view>
+              <view wx:for="{{weekScheduleDays}}" wx:key="key" wx:for-item="dayItem" class="week-day-slots">
+                <view wx:for="{{dayItem.slots}}" wx:key="key" wx:for-item="slot" wx:if="{{slot.visible}}" class="schedule-block {{slot.state}} {{slot.disabled ? 'disabled' : ''}} {{slot.selected ? 'selected' : ''}}" style="grid-column:span {{slot.span}}" data-index="{{slot.index}}" bindtouchstart="startScheduleDrag" catchtouchmove="moveScheduleDrag" bindtouchend="endScheduleDrag" bindtouchcancel="cancelScheduleDrag">
+                  <text class="slot-time">{{slot.sessionId ? slot.displayTime : slot.stateName}}</text><text class="slot-state">{{slot.sessionId ? slot.stateName + ' · ' + slot.durationLabel : ''}}</text>
+                </view>
+              </view>
+            </view>
+          </scroll-view>
         </view>
-        <text class="muted">一次拖拽就是一节课。拖过的连续半小时会合并成一张课程卡片；“已约”不能修改。</text>
+        <text class="muted">左右滑动查看全天。一次拖拽就是一节课，连续半小时会合并成一张课程卡片；“已约”不能修改。</text>
       </view>
       <view wx:if="{{role === 'admin' && kind === 'group'}}" class="card publish-card">
         <view class="title">发布团课场次</view>
@@ -62,11 +70,11 @@
           <button class="primary wide" form-type="submit" disabled="{{busy}}">发布时段</button>
         </form>
       </view>
-      <view class="section">{{day}} · {{sessions.length}} 个已发布时段</view>
+      <view class="section">{{role !== 'student' && kind !== 'group' ? day + ' 起未来 7 天' : day}} · {{sessions.length}} 个已发布时段</view>
       <view class="empty" wx:if="{{!sessions.length}}">当天暂无已发布课程，请切换日期。</view>
       <view class="session-list {{kind === 'private' && role === 'student' ? 'slot-grid' : ''}}">
         <view class="card session" wx:for="{{sessions}}" wx:key="id">
-          <view class="row"><text class="time">{{item.startLabel}}</text><text class="badge">{{item.kindName}}</text></view><text class="muted">至 {{item.endLabel}}</text>
+          <view class="row"><text class="time">{{role !== 'student' && kind !== 'group' ? item.dayLabel + ' ' : ''}}{{item.startLabel}}</text><text class="badge">{{item.kindName}}</text></view><text class="muted">至 {{item.endLabel}}</text>
           <view class="title">{{item.title}}</view><text class="muted">{{item.coachName}} · {{item.roomId}}</text><text class="muted">{{item.cost}} 节课时 · 余 {{item.free}} / {{item.capacity}} 位</text>
           <button wx:if="{{role === 'student'}}" class="primary" disabled="{{!item.canBook || busy}}" data-id="{{item.id}}" bindtap="selectSession">{{item.canBook ? '选择时段' : '暂不可约'}}</button>
           <view wx:elif="{{item.canClose}}" class="row actions"><button class="secondary edit-slot" data-id="{{item.id}}" bindtap="editSlot" disabled="{{busy}}">编辑时段</button><button class="secondary" data-id="{{item.id}}" bindtap="closeSlot" disabled="{{busy}}">关闭时段</button></view>

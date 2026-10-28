@@ -30,7 +30,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   vm.runInNewContext(bundle, {
     console, module: { exports: {} }, exports: {},
     Page(p: PageHarness) { page = p; p.setData = value => Object.assign(p.data, value); },
-    wx: { pageScrollTo(options: { scrollTop: number }) { scrollTop = options.scrollTop; }, showToast() {}, showActionSheet: async () => ({ tapIndex: actionSheetIndex }), showModal: async () => ({ confirm: confirmModal, content: '场地维护测试' }), createSelectorQuery() { const query = { selectAll() { return query; }, boundingClientRect(callback: (rects: object[]) => void) { callback(Array.from({ length: 28 }, (_, i) => ({ top: i * 50, bottom: i * 50 + 48, left: 0, right: 300, dataset: { index: i } }))); return query; }, exec() {} }; return query; }, request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
+    wx: { pageScrollTo(options: { scrollTop: number }) { scrollTop = options.scrollTop; }, showToast() {}, showActionSheet: async () => ({ tapIndex: actionSheetIndex }), showModal: async () => ({ confirm: confirmModal, content: '场地维护测试' }), createSelectorQuery() { const query = { selectAll() { return query; }, boundingClientRect(callback: (rects: object[]) => void) { callback(Array.from({ length: 196 }, (_, i) => ({ top: Math.floor(i / 28) * 50, bottom: Math.floor(i / 28) * 50 + 48, left: (i % 28) * 50, right: (i % 28) * 50 + 48, dataset: { index: i } }))); return query; }, exec() {} }; return query; }, request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
       service.execute(opts.data.role, opts.data.command).then(data => opts.success({ statusCode: 200, data: { ok: true, data } }), e => opts.success({ statusCode: 200, data: { ok: false, message: e.message } }));
     } },
   });
@@ -74,18 +74,19 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   const days = p.data.days as { key: string }[];
   assert.equal(days.length, 7); const day = days[3]!.key;
   p.setData({ day }); p.renderData();
-  let grid = p.data.scheduleSlots as { index: number; startLabel: string; state: string; visible: boolean; displayTime: string; durationLabel: string }[];
-  const restCell = grid.find(item => item.startLabel === '08:00')!;
+  let grid = p.data.scheduleSlots as { day: string; index: number; startLabel: string; state: string; visible: boolean; displayTime: string; durationLabel: string }[];
+  assert.equal((p.data.weekScheduleDays as object[]).length, 7, '教练排班应在同一页面加载连续七天');
+  const restCell = grid.find(item => item.day === day && item.startLabel === '08:00')!;
   actionSheetIndex = 1; p.startScheduleDrag({ currentTarget: { dataset: { index: restCell.index } } }); await p.endScheduleDrag();
-  grid = p.data.scheduleSlots as { index: number; startLabel: string; state: string; visible: boolean; displayTime: string; durationLabel: string }[];
-  assert.equal(grid.find(item => item.startLabel === '08:00')?.state, 'rest');
-  const publishCell = grid.find(item => item.startLabel === '09:30')!;
+  grid = p.data.scheduleSlots as { day: string; index: number; startLabel: string; state: string; visible: boolean; displayTime: string; durationLabel: string }[];
+  assert.equal(grid.find(item => item.day === day && item.startLabel === '08:00')?.state, 'rest');
+  const publishCell = grid.find(item => item.day === day && item.startLabel === '09:30')!;
   actionSheetIndex = 0; p.startScheduleDrag({ currentTarget: { dataset: { index: publishCell.index } } });
-  p.moveScheduleDrag({ touches: [{ clientX: 20, clientY: 220 }] }); await p.endScheduleDrag();
-  grid = p.data.scheduleSlots as { index: number; startLabel: string; state: string; visible: boolean; displayTime: string; durationLabel: string }[];
-  const merged = grid.find(item => item.startLabel === '09:30')!;
+  p.moveScheduleDrag({ touches: [{ clientX: ((publishCell.index % 28) + 1) * 50 + 20, clientY: Math.floor(publishCell.index / 28) * 50 + 20 }] }); await p.endScheduleDrag();
+  grid = p.data.scheduleSlots as { day: string; index: number; startLabel: string; state: string; visible: boolean; displayTime: string; durationLabel: string }[];
+  const merged = grid.find(item => item.day === day && item.startLabel === '09:30')!;
   assert.equal(merged.visible, true); assert.equal(merged.displayTime, '09:30–10:30'); assert.equal(merged.durationLabel, '1小时');
-  assert.equal(grid.find(item => item.startLabel === '10:00')?.visible, false, '同一节课的后续半小时不应单独渲染');
+  assert.equal(grid.find(item => item.day === day && item.startLabel === '10:00')?.visible, false, '同一节课的后续半小时不应单独渲染');
   assert.equal(p.data.error, '');
   p.setData({ role: 'student' }); await p.refresh();
   let slots = p.data.sessions as { id: string; startLabel: string }[];
