@@ -53,13 +53,13 @@ Page({
     const sessions = all.filter(s => dayKey(s.start) === this.data.day && s.status === 'open' && (this.data.role === 'student' ? s.kind === this.data.kind && (s.kind === 'group' || !coach || s.coachId === coach.id) : this.data.role === 'coach' ? s.coachId === profile?.id : true)).sort((a, b) => a.start - b.start).map(s => ({ ...s, startLabel: time(s.start), endLabel: time(s.end), coachName: coaches.find(c => c.id === s.coachId)?.name || '教练', kindName: s.kind === 'private' ? '私教' : '团课', free: s.capacity - s.reserved, canBook: s.reserved < s.capacity && s.start - now >= s.cutoffMinutes * 60000, canCancelSession: this.data.role === 'admin' && s.start > now, canClose: s.reserved === 0 && s.start > now && (this.data.role === 'admin' || s.kind === 'private') }));
     const sourceStart = Date.parse(`${this.data.day}T00:00:00+08:00`);
     const scheduleCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
-    const scheduleSlots = this.data.role === 'student' || this.data.kind === 'group' ? [] : Array.from({ length: 14 }, (_, index) => {
-      const start = sourceStart + (index + 8) * 3600000; const end = start + 3600000;
+    const scheduleSlots = this.data.role === 'student' || this.data.kind === 'group' ? [] : Array.from({ length: 27 }, (_, index) => {
+      const start = sourceStart + 8 * 3600000 + index * 1800000; const end = start + 3600000;
       const session = all.find(s => s.coachId === scheduleCoach && (s.status === 'open' || s.status === 'rest') && s.start < end && start < s.end);
       const exact = !!session && session.start === start && session.end === end && session.kind === 'private';
-      const state = !session ? 'free' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
-      const stateName = ({ free: '未安排', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '未安排';
-      return { key: `${this.data.day}-${index + 8}`, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: exact ? session!.id : '', start, end, disabled: start <= now || (!!session && !exact) || state === 'booked' };
+      const state = !session ? 'free' : !exact ? 'blocked' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
+      const stateName = ({ free: '未安排', blocked: '相邻占用', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '未安排';
+      return { key: `${this.data.day}-${index}`, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: exact ? session!.id : '', start, end, disabled: start <= now || (!!session && !exact) || state === 'booked' };
     });
     const copyCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
     const copySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && s.start >= sourceStart && s.start < sourceStart + 7 * 86400000);

@@ -38,14 +38,14 @@
       <view class="segments" wx:if="{{role !== 'coach'}}"><button class="{{kind === 'private' ? 'selected' : ''}}" data-kind="private" bindtap="chooseKind">私教预约</button><button class="{{kind === 'group' ? 'selected' : ''}}" data-kind="group" bindtap="chooseKind">团课场次</button></view>
       <picker wx:if="{{role !== 'coach'}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">教练：{{coaches[coachIndex].name || '暂无教练'}} <text>更换 ›</text></view></picker>
       <view wx:if="{{role !== 'student' && kind !== 'group'}}" class="card slot-board">
-        <view class="row"><view><view class="title">点击时间安排状态</view><text class="muted">{{day}} · 每格 1 小时</text></view><text class="badge">08:00–22:00</text></view>
-        <view class="slot-legend"><text class="free">未安排</text><text class="scheduled">已排课</text><text class="booked">已约</text><text class="rest">休息</text></view>
+        <view class="row"><view><view class="title">点击时间安排状态</view><text class="muted">{{day}} · 每 30 分钟一个起点，每节 1 小时</text></view><text class="badge">08:00–22:00</text></view>
+        <view class="slot-legend"><text class="free">未安排</text><text class="scheduled">已排课</text><text class="booked">已约</text><text class="rest">休息</text><text class="blocked">相邻占用</text></view>
         <view class="schedule-slot-grid">
           <button wx:for="{{scheduleSlots}}" wx:key="key" class="schedule-slot {{item.state}} {{item.disabled ? 'disabled' : ''}}" data-key="{{item.key}}" bindtap="tapScheduleSlot" disabled="{{busy}}">
             <text class="slot-time">{{item.startLabel}}</text><text class="slot-state">{{item.stateName}}</text><text class="slot-end">至 {{item.endLabel}}</text>
           </button>
         </view>
-        <text class="muted">点击“未安排”可排课或标记休息；“已约”由预约自动生成，不能手动覆盖。</text>
+        <text class="muted">可选 09:00、09:30 等半小时起点。点击“未安排”可排课或标记休息；“已约”由预约自动生成，不能手动覆盖。</text>
       </view>
       <view wx:if="{{role === 'admin' && kind === 'group'}}" class="card publish-card">
         <view class="title">发布团课场次</view>
