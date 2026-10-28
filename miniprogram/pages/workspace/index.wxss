@@ -16,3 +16,8 @@
 .quick-actions button{flex:1;font-size:24rpx;margin:0;padding:24rpx 12rpx;}
 .page button.wide{width:100%;box-sizing:border-box;margin-left:0;margin-right:0;}
 .receipt-detail{line-height:1.8;margin:20rpx 0;color:#424448;overflow-wrap:break-word;}
+.time-picker-row{display:flex;gap:20rpx;margin-top:12rpx;}
+.time-picker-row picker{flex:1;min-width:0;}
+.time-picker-row .picker{display:block;}
+.time-value{font-size:36rpx;font-weight:700;margin-top:8rpx;}
+.publish-card .primary{margin-top:20rpx;}

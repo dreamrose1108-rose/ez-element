@@ -37,6 +37,21 @@
       <picker wx:if="{{role !== 'student'}}" mode="date" value="{{day}}" bindchange="chooseScheduleDate"><view class="picker">排课日期：{{day}} · 查看其他日期 ›</view></picker>
       <view class="segments" wx:if="{{role !== 'coach'}}"><button class="{{kind === 'private' ? 'selected' : ''}}" data-kind="private" bindtap="chooseKind">私教预约</button><button class="{{kind === 'group' ? 'selected' : ''}}" data-kind="group" bindtap="chooseKind">团课场次</button></view>
       <picker wx:if="{{role !== 'coach'}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">教练：{{coaches[coachIndex].name || '暂无教练'}} <text>更换 ›</text></view></picker>
+      <view wx:if="{{role !== 'student'}}" class="card publish-card">
+        <view class="title">{{role === 'coach' ? '新增当天可约时段' : '发布课程场次'}}</view>
+        <text class="muted">{{day}} · {{role === 'coach' || kind === 'private' ? '一对一私教' : '多人团课'}}</text>
+        <form bindsubmit="publish">
+          <view class="time-picker-row">
+            <picker mode="time" value="{{publishStart || '09:00'}}" bindchange="choosePublishStart" disabled="{{busy}}"><view class="picker"><text class="muted">开始时间</text><view class="time-value">{{publishStart || '请选择'}} ▾</view></view></picker>
+            <picker mode="time" value="{{publishEnd || '10:00'}}" bindchange="choosePublishEnd" disabled="{{busy}}"><view class="picker"><text class="muted">结束时间</text><view class="time-value">{{publishEnd || '请选择'}} ▾</view></view></picker>
+          </view>
+          <input name="title" placeholder="课程名称" value="{{role === 'coach' || kind === 'private' ? '专属力量训练' : '活力燃脂团课'}}"/>
+          <input name="room" placeholder="上课地点" value="开放区"/>
+          <input wx:if="{{role === 'admin' && kind === 'group'}}" name="capacity" type="number" placeholder="团课人数上限" value="10"/>
+          <text class="muted">24 小时制，单次不超过 4 小时；发布后学员可预约。</text>
+          <button class="primary wide" form-type="submit" disabled="{{busy}}">发布时段</button>
+        </form>
+      </view>
       <view class="section">{{day}} · {{sessions.length}} 个已发布时段</view>
       <view class="empty" wx:if="{{!sessions.length}}">当天暂无已发布课程，请切换日期。</view>
       <view class="session-list {{kind === 'private' && role === 'student' ? 'slot-grid' : ''}}">
@@ -54,10 +69,6 @@
         <text class="muted">目标：{{copyTarget}} 至 {{copyTargetEnd}}。保留时间、地点与课时，预约不会复制。</text>
         <text wx:if="{{copyUnavailable}}" class="muted">排课记录较多，请逐日发布。</text>
         <button class="secondary" bindtap="copyWeek" disabled="{{busy || !copyCount || copyCount > 35 || copyUnavailable}}">复制到下一周</button>
-      </view>
-      <view wx:if="{{role !== 'student'}}" class="card">
-        <view class="title">{{role === 'coach' ? '新增当天可约时段' : '发布课程场次'}}</view><text class="muted">日期 {{day}} · {{role === 'coach' || kind === 'private' ? '一对一私教' : '多人团课'}}；起止时间使用 24 小时制</text>
-        <form bindsubmit="publish"><input name="title" placeholder="课程名称" value="{{role === 'coach' || kind === 'private' ? '专属力量训练' : '活力燃脂团课'}}"/><view class="row"><input name="start" placeholder="开始，如 09:00"/><input name="end" placeholder="结束，如 10:00"/></view><input name="room" placeholder="上课地点" value="开放区"/><input wx:if="{{role === 'admin' && kind === 'group'}}" name="capacity" type="number" placeholder="团课人数上限" value="10"/><button class="primary" form-type="submit" disabled="{{busy}}">发布时段</button></form>
       </view>
     </block>
     <block wx:if="{{tab === 'account'}}">

@@ -73,7 +73,15 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   const days = p.data.days as { key: string }[];
   assert.equal(days.length, 7); const day = days[3]!.key;
   p.setData({ day });
-  p.publish({ detail: { value: { title: '测试私教', start: '09:00', end: '10:00', room: '私教区' } } }); await idle();
+  const timePage = p as PageHarness & { choosePublishStart(e: object): void; choosePublishEnd(e: object): void };
+  p.publish({ detail: { value: { title: '测试私教', room: '私教区' } } });
+  assert.equal(p.data.error, '请选择开始时间和结束时间');
+  timePage.choosePublishStart({ detail: { value: '09:00' } });
+  timePage.choosePublishEnd({ detail: { value: '08:00' } });
+  p.publish({ detail: { value: { title: '测试私教', room: '私教区' } } });
+  assert.match(String(p.data.error), /结束须晚于开始/);
+  timePage.choosePublishEnd({ detail: { value: '10:00' } });
+  p.publish({ detail: { value: { title: '测试私教', room: '私教区' } } }); await idle();
   assert.equal(p.data.error, '');
   p.setData({ role: 'student' }); await p.refresh();
   let slots = p.data.sessions as { id: string; startLabel: string }[];

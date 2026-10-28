@@ -18,6 +18,7 @@ Page({
     navItems: navigation.student, todayClasses: 0, unsettledCount: 0, coachRoster: [] as { id: string; name: string }[],
     days: Array.from({ length: 7 }, (_, i) => { const key = dayKey(Date.now() + i * 86400000); return { key, short: key.slice(5), label: i === 0 ? '今天' : ['日', '一', '二', '三', '四', '五', '六'][new Date(`${key}T12:00:00+08:00`).getUTCDay()] }; }),
     day: dayKey(Date.now()), kind: 'private', coachIndex: 0, coaches: [] as { id: string; name: string }[],
+    publishStart: '', publishEnd: '',
     sessions: [] as object[], bookings: [] as object[], packs: [] as object[], messages: [] as object[], ledger: [] as object[], pending: [] as object[],
     users: [] as { id: string; name: string }[], memberIndex: 0, purchaseKindIndex: 0, kindNames: ['私教', '团课'],
     staffMembers: [] as { id: string; name: string; shortId: string; isCoach: boolean }[],
@@ -143,8 +144,15 @@ Page({
     if (r.confirm && this.data.role === 'admin' && !this.data.busy) await this.mutate({ action: 'setCoach', userId: member.id, enabled }, enabled ? '已设为教练' : '已取消教练身份');
   },
   register(e: WechatMiniprogram.FormSubmit) { this.mutate({ action: 'register', ...e.detail.value }, '已提交'); },
+  choosePublishStart(e: WechatMiniprogram.PickerChange) { this.setData({ publishStart: String(e.detail.value), error: '' }); },
+  choosePublishEnd(e: WechatMiniprogram.PickerChange) { this.setData({ publishEnd: String(e.detail.value), error: '' }); },
   publish(e: WechatMiniprogram.FormSubmit) {
-    const v = e.detail.value as Record<string, string>; const start = Date.parse(`${this.data.day}T${v.start}:00+08:00`); const end = Date.parse(`${this.data.day}T${v.end}:00+08:00`);
+    if (this.data.busy || this.data.role === 'student') return;
+    const v = e.detail.value as Record<string, string>;
+    if (!this.data.publishStart || !this.data.publishEnd) { this.setData({ error: '请选择开始时间和结束时间' }); return; }
+    const start = Date.parse(`${this.data.day}T${this.data.publishStart}:00+08:00`);
+    const end = Date.parse(`${this.data.day}T${this.data.publishEnd}:00+08:00`);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= Date.now() || end <= start || end - start > 4 * 3600000) { this.setData({ error: '请选择未来的时段，结束须晚于开始，同一天内且不超过四小时' }); return; }
     const coachId = this.data.role === 'coach' ? snapshot.profile?.id : this.data.coaches[this.data.coachIndex]?.id;
     this.mutate({ action: 'publish', kind: this.data.role === 'coach' ? 'private' : this.data.kind, title: v.title, coachId, roomId: v.room || '开放区', exclusive: false, start, end, capacity: this.data.role === 'coach' || this.data.kind === 'private' ? 1 : Number(v.capacity), cost: 1 }, '排课已发布');
   },
