@@ -298,6 +298,23 @@ export class GymService {
       ? (await Promise.all(ownSessions.map(s => this.store.list('bookings', { sessionId: s.id }, 100)))).flat()
       : await this.store.list('bookings', { memberId: actor.id }, 200);
     if (coach && hasRole(actor, 'student')) bookings = [...new Map([...bookings, ...await this.store.list('bookings', { memberId: actor.id }, 200)].map(b => [b.id, b])).values()];
+    const packagePrices = new Map<string, { totalAmountFen: number; unitPriceFen: number; consumed: number; totalCredits: number }>();
+    await Promise.all([...new Set(bookings.map(b => b.packageId))].map(async packageId => {
+      const [memberPackage] = await this.store.list('memberPackages', { id: packageId }, 1);
+      const [purchase] = await this.store.list('purchaseRecords', { packageId }, 1);
+      if (!memberPackage || !purchase || memberPackage.total <= 0 || !Number.isSafeInteger(purchase.amountFen) || purchase.amountFen < 0) return;
+      packagePrices.set(packageId, {
+        totalAmountFen: purchase.amountFen,
+        unitPriceFen: purchase.amountFen / memberPackage.total,
+        consumed: memberPackage.consumed,
+        totalCredits: memberPackage.total,
+      });
+    }));
+    const pricedBookings = bookings.map(booking => {
+      const pricing = packagePrices.get(booking.packageId); if (!pricing) return { ...booking, totalAmountFen: undefined, unitPriceFen: undefined, settleAmountFen: undefined };
+      const settleAmountFen = Math.round(pricing.totalAmountFen * (pricing.consumed + booking.cost) / pricing.totalCredits) - Math.round(pricing.totalAmountFen * pricing.consumed / pricing.totalCredits);
+      return { ...booking, totalAmountFen: pricing.totalAmountFen, unitPriceFen: pricing.unitPriceFen, settleAmountFen };
+    });
     const users = admin ? await this.store.list('users', {}, 200) : [];
     const roster = coach ? await this.store.transaction(async tx => {
       const result: { id: string; name: string }[] = [];
@@ -310,7 +327,7 @@ export class GymService {
       profile: actor,
       sessions: sessions.filter(s => admin || (coach && s.coachId === actor.id) || bookings.some(b => b.sessionId === s.id) || (s.status === 'open' && s.start >= this.clock())),
       packages: await this.store.list('memberPackages', admin ? {} : { memberId: actor.id }, 200),
-      bookings,
+      bookings: pricedBookings,
       inbox: await this.store.list('inbox', { userId: actor.id }, 200),
       ledger: await this.store.list('creditLedger', admin ? {} : { memberId: actor.id }, 200),
       users,

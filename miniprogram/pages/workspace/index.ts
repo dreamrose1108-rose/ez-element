@@ -3,6 +3,7 @@ import { config } from '../../config';
 
 const dayKey = (n: number) => new Date(n + 8 * 3600000).toISOString().slice(0, 10);
 const time = (n: number) => new Date(n + 8 * 3600000).toISOString().slice(11, 16);
+const money = (fen: number) => `¥${(fen / 100).toFixed(2)}`;
 const roleNames = { student: '学员端', coach: '教练端', admin: '管理端' };
 const navigation = {
   student: [{ id: 'home', name: '我的课程' }, { id: 'schedule', name: '预约训练' }, { id: 'account', name: '我的课包' }, { id: 'messages', name: '消息' }],
@@ -81,7 +82,7 @@ Page({
     const copyCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
     const copySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && s.start >= sourceStart && s.start < sourceStart + 7 * 86400000);
     this.setData({ scheduleSlots, weekScheduleDays, copyCount: copySlots.length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
-    const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, statusClass: `status-${b.status}`, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
+    const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, statusClass: `status-${b.status}`, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), unitPriceLabel: b.unitPriceFen === undefined ? '' : money(b.unitPriceFen), settleAmountLabel: b.settleAmountFen === undefined ? '' : money(b.settleAmountFen), totalAmountLabel: b.totalAmountFen === undefined ? '' : money(b.totalAmountFen), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
     const rosterIds = new Set(bookings.map(b => b.memberId));
     this.setData({ todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
     const packs = (snapshot.packages || []).filter(p => this.data.role === 'admin' || p.memberId === profile?.id);
@@ -94,7 +95,10 @@ Page({
     const members = this.data.role === 'admin' ? this.data.staffMembers : [];
     const filteredMembers = members.filter(u => (!query || u.name.toLocaleLowerCase().includes(query) || u.shortId.includes(query)) && (this.data.memberFilter !== 'coach' || u.isCoach));
     const member = members.find(u => u.id === this.data.memberDetailId) || null;
-    const memberPacks = member ? (snapshot.packages || []).filter(p => p.memberId === member.id).map(p => ({ ...p, title: p.kind === 'private' ? '私教课包' : '团课课包', expiry: dayKey(p.expiresAt), expired: p.expiresAt < Date.now() })) : [];
+    const memberPacks = member ? (snapshot.packages || []).filter(p => p.memberId === member.id).map(p => {
+      const purchase = (snapshot.purchases || []).find(item => item.packageId === p.id);
+      return { ...p, title: p.kind === 'private' ? '私教课包' : '团课课包', expiry: dayKey(p.expiresAt), expired: p.expiresAt < Date.now(), totalAmountLabel: purchase ? money(purchase.amountFen) : '', unitPriceLabel: purchase && p.total > 0 ? money(purchase.amountFen / p.total) : '' };
+    }) : [];
     const memberBookings = member ? (snapshot.bookings || []).filter(b => b.memberId === member.id).map(b => {
       const s = (snapshot.sessions || []).find(s => s.id === b.sessionId);
       return { id: b.id, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '场次详情未加载', status: statuses[b.status] || b.status, start: s?.start || 0 };
@@ -185,7 +189,13 @@ Page({
   },
   confirmBook() { const p = this.data.eligible[this.data.packageIndex]; if (p) this.mutate({ action: 'book', sessionId: this.data.selectedId, packageId: p.id }, '预约成功'); },
   async cancelBooking(e: WechatMiniprogram.TouchEvent) { const r = await wx.showModal({ title: '取消预约', content: '取消后冻结课时退回原课包，是否继续？' }); if (r.confirm) this.mutate({ action: 'cancel', bookingId: e.currentTarget.dataset.id }, '已取消'); },
-  async settle(e: WechatMiniprogram.TouchEvent) { const outcome = e.currentTarget.dataset.outcome; const r = await wx.showModal({ title: outcome === 'absent' ? '确认爽约并扣课' : '确认到课并扣课', content: '将冻结课时转为已消耗，并自动向学员发送站内扣费及课包余额通知。请核对学员后确认。' }); if (r.confirm) this.mutate({ action: 'settle', bookingId: e.currentTarget.dataset.id, outcome }, '已结算并发送站内通知'); },
+  async settle(e: WechatMiniprogram.TouchEvent) {
+    const outcome = e.currentTarget.dataset.outcome; const bookingId = String(e.currentTarget.dataset.id);
+    const booking = (this.data.bookings as { id: string; unitPriceLabel?: string; settleAmountLabel?: string }[]).find(item => item.id === bookingId);
+    const price = booking?.unitPriceLabel ? `课单价 ${booking.unitPriceLabel}${booking.settleAmountLabel ? `，本次预计扣款 ${booking.settleAmountLabel}` : ''}。` : '该历史课包缺少收款金额，暂无法显示课单价。';
+    const r = await wx.showModal({ title: outcome === 'absent' ? '确认爽约并扣课' : '确认到课并扣课', content: `${price}将冻结课时转为已消耗，并自动向学员发送站内扣费及课包余额通知。请核对学员后确认。` });
+    if (r.confirm) this.mutate({ action: 'settle', bookingId, outcome }, '已结算并发送站内通知');
+  },
   editSlot(e: WechatMiniprogram.TouchEvent) {
     if (this.data.busy || this.data.role === 'student') return;
     const s = (snapshot.sessions || []).find(s => s.id === e.currentTarget.dataset.id);

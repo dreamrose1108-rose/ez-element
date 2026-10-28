@@ -207,12 +207,16 @@ test('失败事务完整回滚；请求键不能用于不同操作；非法负�
   assert.equal((await f.store.list('sessions', {}, 200)).length, count);
 });
 
-test('学员及教练响应不包含线下收款和他人课包', async () => {
-  const f = await fixture(); await f.purchase();
+test('教练只获得预约所需价格摘要，不包含收款记录和他人课包', async () => {
+  const f = await fixture(); const p = await f.purchase(); const s = await f.publish();
+  await f.call('student', 'book', { sessionId: s.id, packageId: p.id });
   const result = await f.service.execute('coach', { action: 'dashboard' });
   assert.ok('purchases' in result); assert.deepEqual(result.purchases, []);
   assert.ok('packages' in result); assert.deepEqual(result.packages, []);
   assert.ok('users' in result); assert.deepEqual(result.users, []);
+  assert.equal(result.bookings[0]?.unitPriceFen, 20000);
+  assert.equal(result.bookings[0]?.settleAmountFen, 20000);
+  assert.equal(result.bookings[0]?.totalAmountFen, 200000);
 });
 
 test('复制七天私教排班保留课程属性，不复制预约；重复请求不重复创建', async () => {

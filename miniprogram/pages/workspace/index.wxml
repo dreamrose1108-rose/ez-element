@@ -25,6 +25,7 @@
       <view class="card booking-card {{item.statusClass}}" wx:for="{{bookings}}" wx:key="id">
         <view class="row"><text class="title">{{item.title}}</text><text class="badge">{{item.statusName}}</text></view>
         <text class="schedule">{{item.schedule}}</text><text class="muted">{{role === 'student' ? '本次课时' : '学员 ' + item.memberName}} · {{item.cost}} 节</text>
+        <text wx:if="{{item.unitPriceLabel}}" class="price-detail">课单价 {{item.unitPriceLabel}}<text wx:if="{{item.status === 'confirmed' && item.settleAmountLabel}}"> · 本次预计扣款 {{item.settleAmountLabel}}</text></text>
         <text wx:if="{{item.cancelReason}}" class="muted">停课原因：{{item.cancelReason}}</text>
         <button wx:if="{{role === 'student' && item.canCancel}}" class="secondary" data-id="{{item.id}}" bindtap="cancelBooking" disabled="{{busy}}">取消预约</button>
         <text class="muted" wx:if="{{role === 'student' && item.status === 'confirmed' && !item.canCancel}}">需要变更请联系门店</text>
@@ -148,7 +149,7 @@
   <button class="secondary" data-id="{{memberDetail.id}}" bindtap="setCoach" disabled="{{busy}}">{{memberDetail.isCoach ? '取消教练身份' : '设为教练'}}</button>
   <view class="notice">以下为本次已加载的记录。历史数据较多时可能不完整，暂不作为全量对账依据。</view>
   <view class="section">课包</view>
-  <view wx:for="{{memberPacks}}" wx:key="id" class="pack"><view class="title">{{item.title}}</view><text>可用 {{item.available}} · 冻结 {{item.frozen}} · 已消耗 {{item.consumed}}</text><text class="muted">{{item.expired ? '已到期' : '有效期至'}} {{item.expiry}}</text></view>
+  <view wx:for="{{memberPacks}}" wx:key="id" class="pack"><view class="row"><view class="title">{{item.title}}</view><text class="badge">总课时 {{item.total}}</text></view><text>可用 {{item.available}} · 冻结 {{item.frozen}} · 已消耗 {{item.consumed}}</text><view class="pack-price"><text>课单价 {{item.unitPriceLabel || '未记录'}}</text><text>总金额 {{item.totalAmountLabel || '未记录'}}</text></view><text class="muted">{{item.expired ? '已到期' : '有效期至'}} {{item.expiry}}</text></view>
   <view wx:if="{{!memberPacks.length}}" class="empty">已加载记录中暂无课包</view>
   <view class="section">预约记录</view>
   <view wx:for="{{memberBookings}}" wx:key="id" class="card"><view class="row"><text class="title">{{item.title}}</text><text class="badge">{{item.status}}</text></view><text class="muted">{{item.schedule}}</text></view>

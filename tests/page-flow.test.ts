@@ -46,6 +46,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   memberPage.openMember({ currentTarget: { dataset: { id: userKey('student') } } });
   assert.equal((p.data.memberDetail as { id: string }).id, userKey('student'));
   assert.equal((p.data.memberPacks as object[]).length, 1);
+  assert.deepEqual((p.data.memberPacks as { unitPriceLabel: string; totalAmountLabel: string; total: number }[]).map(pack => [pack.unitPriceLabel, pack.totalAmountLabel, pack.total]), [['¥10.00', '¥100.00', 10]]);
   memberPage.chooseMemberBirthday({ detail: { value: '1996-06-18' } });
   await memberPage.updateMember({ detail: { value: { name: '学员新名', phone: '13900000000' } } });
   const updatedMember = await store.transaction(tx => tx.get('users', userKey('student')));
@@ -100,6 +101,8 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   assert.equal(p.data.error, ''); assert.equal(p.data.totalFrozen, 1); assert.equal(p.data.totalAvailable, 9);
   const bookings = p.data.bookings as { id: string }[];
   p.setData({ role: 'coach' }); await p.refresh(); assert.equal((p.data.bookings as object[]).length, 1);
+  assert.equal((p.data.bookings as { unitPriceLabel: string; settleAmountLabel: string }[])[0]?.unitPriceLabel, '¥10.00');
+  assert.equal((p.data.bookings as { unitPriceLabel: string; settleAmountLabel: string }[])[0]?.settleAmountLabel, '¥10.00');
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:30')?.state, 'booked');
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '10:00')?.state, 'booked');
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:00')?.state, 'free');

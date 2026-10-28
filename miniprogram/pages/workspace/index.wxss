@@ -17,6 +17,9 @@
 .booking-card{border-left:8rpx solid #f5cf38;transition:background-color .2s,border-color .2s;}
 .booking-card.status-attended{background:#e9f5ed;border-color:#78ad88;}
 .booking-card.status-attended .badge{background:#cfe8d6;color:#245b35;}
+.price-detail{display:block;margin-top:14rpx;padding:14rpx 18rpx;border-radius:12rpx;background:#fff3bd;color:#5e4a00;font-size:24rpx;font-weight:700;}
+.price-detail text{font-size:24rpx;}
+.pack-price{display:flex;justify-content:space-between;gap:16rpx;margin:18rpx 0 10rpx;padding-top:16rpx;border-top:1rpx solid #dbc875;font-size:24rpx;font-weight:700;}
 .page button.wide{width:100%;box-sizing:border-box;margin-left:0;margin-right:0;}
 .receipt-detail{line-height:1.8;margin:20rpx 0;color:#424448;overflow-wrap:break-word;}
 .time-picker-row{display:flex;gap:20rpx;margin-top:12rpx;}
