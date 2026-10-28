@@ -12,7 +12,7 @@ const navigation = {
 const statuses: Record<string, string> = { confirmed: '待上课', cancelled: '已取消', attended: '已到课', absent: '爽约已结算' };
 let snapshot: Dashboard = { profile: null };
 let dragAnchor = -1; let dragCurrent = -1;
-let dragRects: { top: number; bottom: number; left: number; right: number }[] = [];
+let dragRects: { top: number; bottom: number; left: number; right: number; dataset?: { index?: string | number } }[] = [];
 Page({
   data: {
     demo: config.mode === 'demo', role: 'student' as Role, roleName: '学员端', roles: [] as { id: Role; name: string }[],
@@ -20,7 +20,7 @@ Page({
     navItems: navigation.student, todayClasses: 0, unsettledCount: 0, coachRoster: [] as { id: string; name: string }[],
     days: Array.from({ length: 7 }, (_, i) => { const key = dayKey(Date.now() + i * 86400000); return { key, short: key.slice(5), label: i === 0 ? '今天' : ['日', '一', '二', '三', '四', '五', '六'][new Date(`${key}T12:00:00+08:00`).getUTCDay()] }; }),
     day: dayKey(Date.now()), kind: 'private', coachIndex: 0, coaches: [] as { id: string; name: string }[],
-    publishStart: '', publishEnd: '', dragging: false, scheduleSlots: [] as { key: string; index: number; startLabel: string; endLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean }[],
+    publishStart: '', publishEnd: '', dragging: false, scheduleSlots: [] as { key: string; index: number; startLabel: string; endLabel: string; displayTime: string; durationLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean; visible: boolean; height: number }[],
     sessions: [] as object[], bookings: [] as object[], packs: [] as object[], messages: [] as object[], ledger: [] as object[], pending: [] as object[],
     users: [] as { id: string; name: string }[], memberIndex: 0, purchaseKindIndex: 0, kindNames: ['私教', '团课'],
     staffMembers: [] as { id: string; name: string; shortId: string; isCoach: boolean }[],
@@ -55,12 +55,19 @@ Page({
     const sessions = all.filter(s => dayKey(s.start) === this.data.day && s.status === 'open' && (this.data.role === 'student' ? s.kind === this.data.kind && (s.kind === 'group' || !coach || s.coachId === coach.id) : this.data.role === 'coach' ? s.coachId === profile?.id : true)).sort((a, b) => a.start - b.start).map(s => ({ ...s, startLabel: time(s.start), endLabel: time(s.end), coachName: coaches.find(c => c.id === s.coachId)?.name || '教练', kindName: s.kind === 'private' ? '私教' : '团课', free: s.capacity - s.reserved, canBook: s.reserved < s.capacity && s.start - now >= s.cutoffMinutes * 60000, canCancelSession: this.data.role === 'admin' && s.start > now, canClose: s.reserved === 0 && s.start > now && (this.data.role === 'admin' || s.kind === 'private') }));
     const sourceStart = Date.parse(`${this.data.day}T00:00:00+08:00`);
     const scheduleCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
-    const scheduleSlots = this.data.role === 'student' || this.data.kind === 'group' ? [] : Array.from({ length: 28 }, (_, index) => {
+    const rawScheduleSlots = this.data.role === 'student' || this.data.kind === 'group' ? [] : Array.from({ length: 28 }, (_, index) => {
       const start = sourceStart + 8 * 3600000 + index * 1800000; const end = start + 1800000;
       const session = all.find(s => s.coachId === scheduleCoach && (s.status === 'open' || s.status === 'rest') && s.start < end && start < s.end);
       const state = !session ? 'free' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
       const stateName = ({ free: '可选', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '可选';
       return { key: `${this.data.day}-${index}`, index, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: session?.id || '', sessionStart: session?.start || start, sessionEnd: session?.end || end, start, end, disabled: start <= now || state === 'booked', selected: false };
+    });
+    const firstIndexBySession = new Map<string, number>();
+    rawScheduleSlots.forEach(slot => { if (slot.sessionId && !firstIndexBySession.has(slot.sessionId)) firstIndexBySession.set(slot.sessionId, slot.index); });
+    const scheduleSlots = rawScheduleSlots.map(slot => {
+      const span = slot.sessionId ? Math.max(1, Math.round((slot.sessionEnd - slot.sessionStart) / 1800000)) : 1;
+      const minutes = span * 30; const durationLabel = minutes < 60 ? `${minutes}分钟` : minutes % 60 ? `${Math.floor(minutes / 60)}小时${minutes % 60}分钟` : `${minutes / 60}小时`;
+      return { ...slot, visible: !slot.sessionId || firstIndexBySession.get(slot.sessionId) === slot.index, displayTime: slot.sessionId ? `${time(slot.sessionStart)}–${time(slot.sessionEnd)}` : slot.startLabel, durationLabel: slot.sessionId ? durationLabel : '30分钟', height: span * 102 - 10 };
     });
     const copyCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
     const copySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && s.start >= sourceStart && s.start < sourceStart + 7 * 86400000);
@@ -104,13 +111,13 @@ Page({
     const index = Number(e.currentTarget.dataset.index); const slot = this.data.scheduleSlots[index]; if (!slot) return;
     dragAnchor = index; dragCurrent = index;
     this.setData({ dragging: slot.state === 'free' && !slot.disabled, scheduleSlots: this.data.scheduleSlots.map((item, i) => ({ ...item, selected: i === index && slot.state === 'free' && !slot.disabled })) });
-    wx.createSelectorQuery().selectAll('.schedule-block').boundingClientRect(result => { dragRects = (result as unknown as { top: number; bottom: number; left: number; right: number }[]) || []; }).exec();
+    wx.createSelectorQuery().selectAll('.schedule-block').boundingClientRect(result => { dragRects = (result as unknown as { top: number; bottom: number; left: number; right: number; dataset?: { index?: string | number } }[]) || []; }).exec();
   },
   moveScheduleDrag(e: WechatMiniprogram.TouchEvent) {
     if (dragAnchor < 0 || !this.data.dragging) return;
     const touch = e.touches[0]; if (!touch) return;
-    const index = dragRects.findIndex(rect => touch.clientY >= rect.top && touch.clientY <= rect.bottom && touch.clientX >= rect.left && touch.clientX <= rect.right);
-    if (index < 0) return;
+    const rect = dragRects.find(item => touch.clientY >= item.top && touch.clientY <= item.bottom && touch.clientX >= item.left && touch.clientX <= item.right);
+    const index = Number(rect?.dataset?.index); if (!rect || !Number.isInteger(index)) return;
     const direction = index >= dragAnchor ? 1 : -1; let next = dragAnchor;
     while (next !== index) {
       const candidate = next + direction; const size = Math.abs(candidate - dragAnchor) + 1; const slot = this.data.scheduleSlots[candidate];
