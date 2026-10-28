@@ -6,6 +6,14 @@ export const userKey = (openid: string) => key('wechat', openid);
 export const defaultRules: Rules = { id: 'store', bookingDays: 14, privateCancelHours: 12, groupCancelHours: 2, cutoffMinutes: 60 };
 const hasRole = (u: User, role: Role) => u.roles.includes(role);
 const role = (u: User, r: Role) => requireThat(hasRole(u, r), 'FORBIDDEN', '没有操作权限');
+interface CoachPaySummary {
+  employmentType: 'fullTime' | 'partTime'; month: string;
+  todayClassCount: number; todayClassRevenueFen: number; todayClassCommissionFen: number;
+  todayPerformanceFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number;
+  monthClassCount: number; monthClassRevenueFen: number; classCommissionBps: number; monthClassCommissionFen: number;
+  monthPerformanceFen: number; performanceCommissionBps: number; performanceCommissionFen: number;
+  baseSalaryFen: number; bonusFen: number; estimatedTotalFen: number;
+}
 async function user(tx: Tx, id: string): Promise<User> {
   const u = await tx.get('users', id);
   requireThat(u && u.status === 'active', 'INACTIVE', '请先提交资料并等待门店审核');
@@ -35,6 +43,51 @@ async function notify(tx: Tx, booking: Booking, s: Session, title: string, now: 
 
 export class GymService {
   constructor(private store: Store, private clock = Date.now) {}
+  private async coachPaySummary(coach: User): Promise<CoachPaySummary> {
+    const today = dayKey(this.clock()); const month = today.slice(0, 7);
+    const employmentType = coach.employmentType || 'fullTime';
+    const ownSessions = await this.store.list('sessions', { coachId: coach.id }, 1000);
+    const monthSessions = new Map(ownSessions.filter(s => dayKey(s.end).startsWith(month)).map(s => [s.id, s]));
+    const bookings = (await Promise.all([...monthSessions.keys()].map(sessionId => this.store.list('bookings', { sessionId }, 100)))).flat();
+    const attended = bookings.filter(b => b.status === 'attended');
+    const receiptAmounts = await Promise.all(attended.map(async booking => {
+      const notices = await this.store.list('inbox', { bookingId: booking.id, userId: booking.memberId }, 10);
+      return { booking, amount: notices.find(notice => notice.receipt)?.receipt?.deductedFen || 0 };
+    }));
+    const monthClassCount = new Set(attended.map(b => b.sessionId)).size;
+    const todayReceipts = receiptAmounts.filter(item => dayKey(monthSessions.get(item.booking.sessionId)!.end) === today);
+    const todayClassCount = new Set(todayReceipts.map(item => item.booking.sessionId)).size;
+    const monthClassRevenueFen = receiptAmounts.reduce((sum, item) => sum + item.amount, 0);
+    const todayClassRevenueFen = todayReceipts.reduce((sum, item) => sum + item.amount, 0);
+    const classCommissionBps = employmentType === 'partTime' ? 3000
+      : monthClassCount < 60 ? 2000 : monthClassCount < 100 ? 2500 : monthClassCount < 120 ? 3000 : 3500;
+    const monthClassCommissionFen = Math.round(monthClassRevenueFen * classCommissionBps / 10000);
+    const todayClassCommissionFen = Math.round(todayClassRevenueFen * classCommissionBps / 10000);
+    const monthPurchases = (await this.store.list('purchaseRecords', {}, 1000)).filter(p => dayKey(p.at).startsWith(month));
+    const performanceShares = await Promise.all(monthPurchases.map(async purchase => {
+      const [pack] = await this.store.list('memberPackages', { id: purchase.packageId }, 1);
+      if (!pack?.coachIds.includes(coach.id)) return { amount: 0, today: false };
+      const share = Math.round(purchase.amountFen / Math.max(1, pack.coachIds.length));
+      return { amount: share, today: dayKey(purchase.at) === today };
+    }));
+    const monthPerformanceFen = performanceShares.reduce((sum, item) => sum + item.amount, 0);
+    const todayPerformanceFen = performanceShares.filter(item => item.today).reduce((sum, item) => sum + item.amount, 0);
+    const performanceCommissionBps = employmentType === 'partTime' || monthPerformanceFen < 1500000 ? 0
+      : monthPerformanceFen < 2500000 ? 400 : monthPerformanceFen < 3500000 ? 800 : 1000;
+    const performanceCommissionFen = Math.round(monthPerformanceFen * performanceCommissionBps / 10000);
+    const todayPerformanceCommissionFen = Math.round(todayPerformanceFen * performanceCommissionBps / 10000);
+    const baseSalaryFen = employmentType === 'fullTime' ? 220000 : 0;
+    const bonusFen = employmentType === 'fullTime' && monthPerformanceFen > 6000000 ? 100000 : 0;
+    return {
+      employmentType, month, todayClassCount, todayClassRevenueFen, todayClassCommissionFen,
+      todayPerformanceFen, todayPerformanceCommissionFen,
+      todayTotalFen: todayClassCommissionFen + todayPerformanceCommissionFen,
+      monthClassCount, monthClassRevenueFen, classCommissionBps, monthClassCommissionFen,
+      monthPerformanceFen, performanceCommissionBps, performanceCommissionFen,
+      baseSalaryFen, bonusFen,
+      estimatedTotalFen: baseSalaryFen + bonusFen + monthClassCommissionFen + performanceCommissionFen,
+    };
+  }
   async execute(openid: string, raw: unknown) {
     requireThat(openid, 'UNAUTHENTICATED', '请从微信小程序访问');
     const command = commandSchema.parse(raw);
@@ -329,59 +382,33 @@ export class GymService {
       }
       return result;
     }) : [];
-    let coachPay: {
-      employmentType: 'fullTime' | 'partTime'; month: string;
-      todayClassCount: number; todayClassRevenueFen: number; todayClassCommissionFen: number;
-      todayPerformanceFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number;
-      monthClassCount: number; monthClassRevenueFen: number; classCommissionBps: number; monthClassCommissionFen: number;
-      monthPerformanceFen: number; performanceCommissionBps: number; performanceCommissionFen: number;
-      baseSalaryFen: number; bonusFen: number; estimatedTotalFen: number;
+    const coachPay = coach ? await this.coachPaySummary(actor) : undefined;
+    let adminFinance: {
+      todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number;
+      coaches: { id: string; name: string; employmentType: 'fullTime' | 'partTime'; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[];
     } | undefined;
-    if (coach) {
-      const today = dayKey(this.clock()); const month = today.slice(0, 7);
-      const employmentType = actor.employmentType || 'fullTime';
-      const monthSessions = new Map(ownSessions.filter(s => dayKey(s.end).startsWith(month)).map(s => [s.id, s]));
-      const attended = bookings.filter(b => monthSessions.has(b.sessionId) && b.status === 'attended');
-      const receiptAmounts = await Promise.all(attended.map(async booking => {
-        const notices = await this.store.list('inbox', { bookingId: booking.id, userId: booking.memberId }, 10);
-        return { booking, amount: notices.find(notice => notice.receipt)?.receipt?.deductedFen || 0 };
-      }));
-      const monthClassCount = new Set(attended.map(b => b.sessionId)).size;
-      const todayReceipts = receiptAmounts.filter(item => dayKey(monthSessions.get(item.booking.sessionId)!.end) === today);
-      const todayClassCount = new Set(todayReceipts.map(item => item.booking.sessionId)).size;
-      const monthClassRevenueFen = receiptAmounts.reduce((sum, item) => sum + item.amount, 0);
-      const todayClassRevenueFen = todayReceipts.reduce((sum, item) => sum + item.amount, 0);
-      const classCommissionBps = employmentType === 'partTime' ? 3000
-        : monthClassCount < 60 ? 2000 : monthClassCount < 100 ? 2500 : monthClassCount < 120 ? 3000 : 3500;
-      const monthClassCommissionFen = Math.round(monthClassRevenueFen * classCommissionBps / 10000);
-      const todayClassCommissionFen = Math.round(todayClassRevenueFen * classCommissionBps / 10000);
-
-      // A private package sale is attributed equally to its bound coaches. Group
-      // packages have no coach binding, so they are intentionally not counted as
-      // an individual's performance. This keeps the calculation deterministic.
-      const monthPurchases = (await this.store.list('purchaseRecords', {}, 1000)).filter(p => dayKey(p.at).startsWith(month));
-      const performanceShares = await Promise.all(monthPurchases.map(async purchase => {
-        const [pack] = await this.store.list('memberPackages', { id: purchase.packageId }, 1);
-        if (!pack?.coachIds.includes(actor.id)) return { amount: 0, today: false };
-        const share = Math.round(purchase.amountFen / Math.max(1, pack.coachIds.length));
-        return { amount: share, today: dayKey(purchase.at) === today };
-      }));
-      const monthPerformanceFen = performanceShares.reduce((sum, item) => sum + item.amount, 0);
-      const todayPerformanceFen = performanceShares.filter(item => item.today).reduce((sum, item) => sum + item.amount, 0);
-      const performanceCommissionBps = employmentType === 'partTime' || monthPerformanceFen < 1500000 ? 0
-        : monthPerformanceFen < 2500000 ? 400 : monthPerformanceFen < 3500000 ? 800 : 1000;
-      const performanceCommissionFen = Math.round(monthPerformanceFen * performanceCommissionBps / 10000);
-      const todayPerformanceCommissionFen = Math.round(todayPerformanceFen * performanceCommissionBps / 10000);
-      const baseSalaryFen = employmentType === 'fullTime' ? 220000 : 0;
-      const bonusFen = employmentType === 'fullTime' && monthPerformanceFen > 6000000 ? 100000 : 0;
-      coachPay = {
-        employmentType, month, todayClassCount, todayClassRevenueFen, todayClassCommissionFen,
-        todayPerformanceFen, todayPerformanceCommissionFen,
-        todayTotalFen: todayClassCommissionFen + todayPerformanceCommissionFen,
-        monthClassCount, monthClassRevenueFen, classCommissionBps, monthClassCommissionFen,
-        monthPerformanceFen, performanceCommissionBps, performanceCommissionFen,
-        baseSalaryFen, bonusFen,
-        estimatedTotalFen: baseSalaryFen + bonusFen + monthClassCommissionFen + performanceCommissionFen,
+    if (admin) {
+      const today = dayKey(this.clock());
+      const [allPurchases, allBookings, allSessions, allInbox, activeUsers] = await Promise.all([
+        this.store.list('purchaseRecords', {}, 1000), this.store.list('bookings', {}, 1000),
+        this.store.list('sessions', {}, 1000), this.store.list('inbox', {}, 1000),
+        this.store.list('users', { status: 'active' }, 200),
+      ]);
+      const coaches = activeUsers.filter(u => hasRole(u, 'coach'));
+      const payroll = await Promise.all(coaches.map(async coachUser => ({ coach: coachUser, pay: await this.coachPaySummary(coachUser) })));
+      const bookingById = new Map(allBookings.map(b => [b.id, b])); const sessionById = new Map(allSessions.map(s => [s.id, s]));
+      const todayConsumedFen = allInbox.filter(notice => {
+        if (!notice.receipt) return false;
+        const booking = bookingById.get(notice.bookingId); const session = booking && sessionById.get(booking.sessionId);
+        return !!booking && (booking.status === 'attended' || booking.status === 'absent') && !!session && dayKey(session.end) === today;
+      }).reduce((sum, notice) => sum + (notice.receipt?.deductedFen || 0), 0);
+      const todayRevenueFen = allPurchases.filter(p => dayKey(p.at) === today).reduce((sum, p) => sum + p.amountFen, 0);
+      const todayCoachPayFen = payroll.reduce((sum, item) => sum + item.pay.todayTotalFen, 0);
+      adminFinance = {
+        todayRevenueFen, todayConsumedFen, todayCoachPayFen, todayAfterCoachPayFen: todayRevenueFen - todayCoachPayFen,
+        coaches: payroll.map(({ coach: coachUser, pay }) => ({ id: coachUser.id, name: coachUser.name, employmentType: pay.employmentType,
+          todayClassCommissionFen: pay.todayClassCommissionFen, todayPerformanceCommissionFen: pay.todayPerformanceCommissionFen,
+          todayTotalFen: pay.todayTotalFen, monthEstimatedTotalFen: pay.estimatedTotalFen })),
       };
     }
     return {
@@ -395,6 +422,7 @@ export class GymService {
       roster,
       coaches: (await this.store.list('users', { status: 'active' }, 200)).filter(u => hasRole(u, 'coach')).map(u => ({ id: u.id, name: u.name })),
       coachPay,
+      adminFinance,
       purchases: admin ? await this.store.list('purchaseRecords', {}, 200) : [],
     };
   }

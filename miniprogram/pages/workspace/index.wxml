@@ -18,6 +18,14 @@
       <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
       <view wx:if="{{role === 'student'}}" class="metrics"><view><text class="number">{{totalAvailable}}</text><text>可用课时</text></view><view><text class="number">{{totalFrozen}}</text><text>已冻结</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
       <view wx:if="{{role !== 'student'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{role === 'admin' ? pending.length : myCount}}</text><text>{{role === 'admin' ? '待审核学员' : '待上课预约'}}</text></view></view>
+      <view wx:if="{{role === 'admin' && adminFinance}}" class="admin-finance-card">
+        <view class="row"><view><text class="finance-eyebrow">今日经营概览</text><view class="finance-total">{{adminFinance.todayRevenueLabel}}</view><text class="finance-caption">今日公司实收</text></view><text class="badge">实时预估</text></view>
+        <view class="finance-metrics"><view><text>{{adminFinance.todayConsumedLabel}}</text><text>今日消课金额</text></view><view><text>{{adminFinance.todayCoachPayLabel}}</text><text>教练工资预估</text></view><view class="{{adminFinance.negative ? 'negative' : ''}}"><text>{{adminFinance.todayAfterCoachPayLabel}}</text><text>实收减教练工资</text></view></view>
+        <view class="section finance-section">今日教练收入</view>
+        <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-pay-row"><view><text class="title">{{item.name}}</text><text class="muted">{{item.employmentTypeName}} · 课时 {{item.todayClassCommissionLabel}} · 业绩 {{item.todayPerformanceCommissionLabel}}</text></view><view class="pay-row-total"><text>{{item.todayTotalLabel}}</text><text>本月 {{item.monthEstimatedTotalLabel}}</text></view></view>
+        <view wx:if="{{!adminFinance.coaches.length}}" class="empty">暂无教练工资数据</view>
+        <text class="finance-note">今日公司实收按当日登记的课包收款统计；今日消课金额按当日到课或爽约的实际扣款统计。实收减教练工资不含房租、税费、社保津贴及其他成本。</text>
+      </view>
       <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
       <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>

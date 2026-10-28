@@ -20,6 +20,10 @@ interface CoachPayView {
   monthPerformanceLabel: string; performanceRateLabel: string; performanceCommissionLabel: string;
   baseSalaryLabel: string; bonusLabel: string; estimatedTotalLabel: string;
 }
+interface AdminFinanceView {
+  todayRevenueLabel: string; todayConsumedLabel: string; todayCoachPayLabel: string; todayAfterCoachPayLabel: string; negative: boolean;
+  coaches: { id: string; name: string; employmentTypeName: string; todayClassCommissionLabel: string; todayPerformanceCommissionLabel: string; todayTotalLabel: string; monthEstimatedTotalLabel: string }[];
+}
 let snapshot: Dashboard = { profile: null };
 let dragAnchor = -1; let dragCurrent = -1;
 let dragRects: { top: number; bottom: number; left: number; right: number; dataset?: { index?: string | number } }[] = [];
@@ -39,6 +43,7 @@ Page({
     memberDetailId: '', memberDetail: null as StaffMember | null,
     memberPacks: [] as object[], memberBookings: [] as object[],
     coachPay: null as CoachPayView | null,
+    adminFinance: null as AdminFinanceView | null,
     totalAvailable: 0, totalFrozen: 0, totalConsumed: 0, myCount: 0,
     editing: null as null | { id: string; title: string; day: string; start: string; end: string; room: string; capacity: number; kind: string },
     copyCount: 0, copyEnd: '', copyTarget: '', copyTargetEnd: '', copyUnavailable: false,
@@ -102,8 +107,16 @@ Page({
       monthPerformanceLabel: money(pay.monthPerformanceFen), performanceRateLabel: `${(pay.performanceCommissionBps / 100).toFixed(0)}%`, performanceCommissionLabel: money(pay.performanceCommissionFen),
       baseSalaryLabel: money(pay.baseSalaryFen), bonusLabel: money(pay.bonusFen), estimatedTotalLabel: money(pay.estimatedTotalFen),
     } : null;
+    const finance = snapshot.adminFinance;
+    const adminFinance: AdminFinanceView | null = this.data.role === 'admin' && finance ? {
+      todayRevenueLabel: money(finance.todayRevenueFen), todayConsumedLabel: money(finance.todayConsumedFen),
+      todayCoachPayLabel: money(finance.todayCoachPayFen), todayAfterCoachPayLabel: money(finance.todayAfterCoachPayFen), negative: finance.todayAfterCoachPayFen < 0,
+      coaches: finance.coaches.map(item => ({ id: item.id, name: item.name, employmentTypeName: item.employmentType === 'fullTime' ? '全职' : '兼职',
+        todayClassCommissionLabel: money(item.todayClassCommissionFen), todayPerformanceCommissionLabel: money(item.todayPerformanceCommissionFen),
+        todayTotalLabel: money(item.todayTotalFen), monthEstimatedTotalLabel: money(item.monthEstimatedTotalFen) })),
+    } : null;
     const rosterIds = new Set(bookings.map(b => b.memberId));
-    this.setData({ coachPay, todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
+    this.setData({ coachPay, adminFinance, todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
     const packs = (snapshot.packages || []).filter(p => this.data.role === 'admin' || p.memberId === profile?.id);
     const messages = (snapshot.inbox || []).filter(m => this.data.role === 'admin' || m.userId === profile?.id);
     const visibleLedger = (snapshot.ledger || []).filter(l => this.data.role === 'admin' || l.memberId === profile?.id);

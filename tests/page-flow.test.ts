@@ -37,6 +37,9 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   assert.ok(page); const p = page;
   const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void; chooseMemberBirthday(e: object): void; updateMember(e: object): Promise<void>; updateCoachPay(e: object): Promise<void> };
   p.setData({ role: 'admin' }); await p.refresh();
+  const finance = p.data.adminFinance as { todayRevenueLabel: string; todayCoachPayLabel: string; todayAfterCoachPayLabel: string; coaches: { name: string; monthEstimatedTotalLabel: string }[] };
+  assert.equal(finance.todayRevenueLabel, '¥100.00'); assert.equal(finance.todayCoachPayLabel, '¥0.00'); assert.equal(finance.todayAfterCoachPayLabel, '¥100.00');
+  assert.equal(finance.coaches.find(item => item.name === 'coach')?.monthEstimatedTotalLabel, '¥2200.00');
   const navPage = p as PageHarness & { switchTab(e: object): void };
   assert.equal((p.data.navItems as { id: string }[]).map(n => n.id).join(','), 'home,schedule,account,finance');
   navPage.switchTab({ currentTarget: { dataset: { tab: 'finance' } } });

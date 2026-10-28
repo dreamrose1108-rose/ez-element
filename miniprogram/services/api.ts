@@ -15,7 +15,11 @@ export interface CoachPay {
   monthPerformanceFen: number; performanceCommissionBps: number; performanceCommissionFen: number;
   baseSalaryFen: number; bonusFen: number; estimatedTotalFen: number;
 }
-export interface Dashboard { profile: Profile | null; sessions?: Session[]; packages?: Pack[]; bookings?: Booking[]; purchases?: Purchase[]; coachPay?: CoachPay; inbox?: { id: string; userId: string; title: string; at: number }[]; users?: Profile[]; roster?: { id: string; name: string }[]; coaches?: { id: string; name: string }[]; ledger?: { id: string; packageId: string; memberId: string; type: string; at: number; delta: { available: number; frozen: number; consumed: number } }[] }
+export interface AdminFinance {
+  todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number;
+  coaches: { id: string; name: string; employmentType: 'fullTime' | 'partTime'; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[];
+}
+export interface Dashboard { profile: Profile | null; sessions?: Session[]; packages?: Pack[]; bookings?: Booking[]; purchases?: Purchase[]; coachPay?: CoachPay; adminFinance?: AdminFinance; inbox?: { id: string; userId: string; title: string; at: number }[]; users?: Profile[]; roster?: { id: string; name: string }[]; coaches?: { id: string; name: string }[]; ledger?: { id: string; packageId: string; memberId: string; type: string; at: number; delta: { available: number; frozen: number; consumed: number } }[] }
 interface Reply<T> { ok: boolean; data: T; message?: string; code?: string }
 const requests = new Map<string, string>();
 export async function api<T>(role: Role, command: Record<string, unknown>): Promise<T> {

@@ -109,7 +109,7 @@ test('教练工资按全兼职制度核算今日收入和本月预估，爽约�
   await f.call('coach', 'settle', { bookingId: absent.id, outcome: 'absent' });
   // 当天再登记一笔归属该教练的私教销售，使月业绩超过 6 万。
   await f.purchase('student2', { coachIds: [userKey('coach')], amountFen: 6100000 });
-  const fullTime = (await f.service.execute('coach', { action: 'dashboard' }) as { coachPay: Record<string, number | string> }).coachPay;
+  const fullTime = (await f.service.execute('coach', { action: 'dashboard' }) as unknown as { coachPay: Record<string, number | string> }).coachPay;
   assert.equal(fullTime.employmentType, 'fullTime');
   assert.equal(fullTime.monthClassCount, 1); assert.equal(fullTime.todayClassCount, 1);
   assert.equal(fullTime.monthClassRevenueFen, 20000); assert.equal(fullTime.classCommissionBps, 2000);
@@ -118,9 +118,13 @@ test('教练工资按全兼职制度核算今日收入和本月预估，爽约�
   assert.equal(fullTime.performanceCommissionFen, 630000); assert.equal(fullTime.todayPerformanceCommissionFen, 610000);
   assert.equal(fullTime.baseSalaryFen, 220000); assert.equal(fullTime.bonusFen, 100000);
   assert.equal(fullTime.estimatedTotalFen, 954000); assert.equal(fullTime.todayTotalFen, 614000);
+  const adminFinance = (await f.service.execute('admin', { action: 'dashboard' }) as { adminFinance: { todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number; coaches: { id: string; name: string; employmentType: string; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[] } }).adminFinance;
+  assert.equal(adminFinance.todayRevenueFen, 6100000); assert.equal(adminFinance.todayConsumedFen, 40000);
+  assert.equal(adminFinance.todayCoachPayFen, 614000); assert.equal(adminFinance.todayAfterCoachPayFen, 5486000);
+  assert.deepEqual(adminFinance.coaches.find(item => item.id === userKey('coach')), { id: userKey('coach'), name: 'coach', employmentType: 'fullTime', todayClassCommissionFen: 4000, todayPerformanceCommissionFen: 610000, todayTotalFen: 614000, monthEstimatedTotalFen: 954000 });
 
   await f.call('admin', 'updateCoachPay', { userId: userKey('coach'), employmentType: 'partTime' });
-  const partTime = (await f.service.execute('coach', { action: 'dashboard' }) as { coachPay: Record<string, number | string> }).coachPay;
+  const partTime = (await f.service.execute('coach', { action: 'dashboard' }) as unknown as { coachPay: Record<string, number | string> }).coachPay;
   assert.equal(partTime.employmentType, 'partTime'); assert.equal(partTime.classCommissionBps, 3000);
   assert.equal(partTime.monthClassCommissionFen, 6000); assert.equal(partTime.performanceCommissionFen, 0);
   assert.equal(partTime.baseSalaryFen, 0); assert.equal(partTime.bonusFen, 0); assert.equal(partTime.estimatedTotalFen, 6000);
