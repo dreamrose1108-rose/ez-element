@@ -58,7 +58,7 @@ Page({
       const session = all.find(s => s.coachId === scheduleCoach && (s.status === 'open' || s.status === 'rest') && s.start < end && start < s.end);
       const exact = !!session && session.start === start && session.end === end && session.kind === 'private';
       const state = !session ? 'free' : !exact ? 'blocked' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
-      const stateName = ({ free: '未安排', blocked: '相邻占用', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '未安排';
+      const stateName = ({ free: '未安排', blocked: '与课程重叠', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '未安排';
       return { key: `${this.data.day}-${index}`, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: exact ? session!.id : '', start, end, disabled: start <= now || (!!session && !exact) || state === 'booked' };
     });
     const copyCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
@@ -103,7 +103,7 @@ Page({
     const slot = this.data.scheduleSlots.find(item => item.key === String(e.currentTarget.dataset.key));
     if (!slot) return;
     if (slot.state === 'booked') { await wx.showModal({ title: '该时段已约', content: '已有学员预约，不能改为休息或取消排课。请在课程详情中处理预约。', showCancel: false }); return; }
-    if (slot.disabled) { await wx.showModal({ title: '暂不可修改', content: slot.start <= Date.now() ? '已开始或已过去的时间不能调整。' : '该课程跨越多个时间格，请在课程详情中编辑。', showCancel: false }); return; }
+    if (slot.disabled) { await wx.showModal({ title: slot.start <= Date.now() ? '暂不可修改' : '不能选择', content: slot.start <= Date.now() ? '已开始或已过去的时间不能调整。' : '这个时间段与已有排课重叠，请选择其他时间。', showCancel: false }); return; }
     const options = slot.state === 'free' ? ['排课', '标记休息'] : slot.state === 'rest' ? ['改为排课', '取消休息'] : ['标记休息', '取消排课'];
     let choice: WechatMiniprogram.ShowActionSheetSuccessCallbackResult;
     try { choice = await wx.showActionSheet({ itemList: options }); } catch { return; }
