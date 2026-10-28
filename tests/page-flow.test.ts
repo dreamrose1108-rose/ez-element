@@ -35,7 +35,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
     } },
   });
   assert.ok(page); const p = page;
-  const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void; chooseMemberBirthday(e: object): void; updateMember(e: object): Promise<void> };
+  const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void; chooseMemberBirthday(e: object): void; updateMember(e: object): Promise<void>; updateCoachPay(e: object): Promise<void> };
   p.setData({ role: 'admin' }); await p.refresh();
   const navPage = p as PageHarness & { switchTab(e: object): void };
   assert.equal((p.data.navItems as { id: string }[]).map(n => n.id).join(','), 'home,schedule,account,finance');
@@ -54,6 +54,13 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   memberPage.filterMembers({ currentTarget: { dataset: { filter: 'coach' } } });
   assert.equal((p.data.filteredMembers as object[]).length, 0);
   memberPage.closeMember(); assert.equal(p.data.memberDetail, null);
+  memberPage.openMember({ currentTarget: { dataset: { id: userKey('coach') } } });
+  await memberPage.updateCoachPay({ currentTarget: { dataset: { type: 'partTime' } } });
+  assert.equal((await store.transaction(tx => tx.get('users', userKey('coach'))))?.employmentType, 'partTime');
+  assert.equal((p.data.memberDetail as unknown as { employmentTypeName: string }).employmentTypeName, '兼职');
+  await memberPage.updateCoachPay({ currentTarget: { dataset: { type: 'fullTime' } } });
+  assert.equal((await store.transaction(tx => tx.get('users', userKey('coach'))))?.employmentType, 'fullTime');
+  memberPage.closeMember();
   memberPage.searchMembers({ detail: { value: '' } });
   memberPage.filterMembers({ currentTarget: { dataset: { filter: 'all' } } });
   p.setData({ role: 'student' }); await p.refresh();
@@ -76,6 +83,9 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   assert.ok(!(p.data.coaches as { id: string }[]).some(u => u.id === userKey('student')));
   const idle = async () => { for (let i = 0; i < 30; i++) { await new Promise<void>(r => setImmediate(r)); if (!p.data.busy) return; } assert.fail('page did not settle'); };
   p.setData({ role: 'coach' }); await p.refresh();
+  const pay = p.data.coachPay as { employmentTypeName: string; baseSalaryLabel: string; monthPerformanceLabel: string; estimatedTotalLabel: string };
+  assert.equal(pay.employmentTypeName, '全职'); assert.equal(pay.baseSalaryLabel, '¥2200.00');
+  assert.equal(pay.monthPerformanceLabel, '¥100.00'); assert.equal(pay.estimatedTotalLabel, '¥2200.00');
   const days = p.data.days as { key: string }[];
   assert.equal(days.length, 7); const day = days[3]!.key;
   p.setData({ day }); p.renderData();

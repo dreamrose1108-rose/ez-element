@@ -18,6 +18,15 @@
       <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
       <view wx:if="{{role === 'student'}}" class="metrics"><view><text class="number">{{totalAvailable}}</text><text>可用课时</text></view><view><text class="number">{{totalFrozen}}</text><text>已冻结</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
       <view wx:if="{{role !== 'student'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{role === 'admin' ? pending.length : myCount}}</text><text>{{role === 'admin' ? '待审核学员' : '待上课预约'}}</text></view></view>
+      <view wx:if="{{role === 'coach' && coachPay}}" class="pay-card">
+        <view class="row"><view><text class="pay-eyebrow">今日收入 · {{coachPay.employmentTypeName}}</text><view class="pay-title">{{coachPay.todayTotalLabel}}</view></view><text class="pay-chip">按当前月档位</text></view>
+        <view class="pay-metrics"><view><text>{{coachPay.todayClassCommissionLabel}}</text><text>课时提成</text></view><view><text>{{coachPay.todayPerformanceCommissionLabel}}</text><text>业绩提成</text></view><view><text>{{coachPay.todayClassCount}}</text><text>已到课节数</text></view></view>
+        <text class="pay-detail">今日到课对应实收 {{coachPay.todayClassRevenueLabel}}；今日归属业绩 {{coachPay.todayPerformanceLabel}}。业绩档位变化时，今日预估会随本月最终档位调整。</text>
+        <view class="pay-divider"></view>
+        <view class="row"><view><text class="pay-eyebrow">{{coachPay.month}} 本月工资预估</text><view class="pay-total">{{coachPay.estimatedTotalLabel}}</view></view><text class="pay-chip">{{coachPay.monthClassCount}} 节课</text></view>
+        <view class="pay-breakdown"><text>底薪 {{coachPay.baseSalaryLabel}}</text><text>课时提成 {{coachPay.monthClassCommissionLabel}}（{{coachPay.classRateLabel}}）</text><text>业绩提成 {{coachPay.performanceCommissionLabel}}（{{coachPay.performanceRateLabel}}）</text><text wx:if="{{coachPay.bonusLabel !== '¥0.00'}}">超 6 万奖励 {{coachPay.bonusLabel}}</text></view>
+        <text class="pay-detail">月课时对应实收 {{coachPay.monthClassRevenueLabel}}；归属业绩 {{coachPay.monthPerformanceLabel}}。全职社保及津贴金额尚未配置，不计入本页合计。</text>
+      </view>
       <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
       <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
@@ -147,6 +156,12 @@
     <button class="primary" form-type="submit" disabled="{{busy}}">保存基础资料</button>
   </form>
   <button class="secondary" data-id="{{memberDetail.id}}" bindtap="setCoach" disabled="{{busy}}">{{memberDetail.isCoach ? '取消教练身份' : '设为教练'}}</button>
+  <view wx:if="{{memberDetail.isCoach}}" class="coach-pay-setting">
+    <view class="section">工资制度</view>
+    <text class="muted">当前：{{memberDetail.employmentTypeName}}。选择后立即保存。</text>
+    <view class="segments"><button class="{{memberDetail.employmentType === 'fullTime' ? 'selected' : ''}}" data-type="fullTime" bindtap="updateCoachPay" disabled="{{busy}}">全职</button><button class="{{memberDetail.employmentType === 'partTime' ? 'selected' : ''}}" data-type="partTime" bindtap="updateCoachPay" disabled="{{busy}}">兼职</button></view>
+    <view class="notice">全职：底薪 ¥2200；月业绩 1.5 万以下无提成、1.5–2.5 万 4%、2.5–3.5 万 8%、3.5 万以上 10%，超过 6 万一次奖励 ¥1000；月课时少于 60 节 20%、60–99 节 25%、100–119 节 30%、120 节以上 35%。兼职：无底薪，课时提成 30%。</view>
+  </view>
   <view class="notice">以下为本次已加载的记录。历史数据较多时可能不完整，暂不作为全量对账依据。</view>
   <view class="section">课包</view>
   <view wx:for="{{memberPacks}}" wx:key="id" class="pack"><view class="row"><view class="title">{{item.title}}</view><text class="badge">总课时 {{item.total}}</text></view><text>可用 {{item.available}} · 冻结 {{item.frozen}} · 已消耗 {{item.consumed}}</text><view class="pack-price"><text>课单价 {{item.unitPriceLabel || '未记录'}}</text><text>总金额 {{item.totalAmountLabel || '未记录'}}</text></view><text class="muted">{{item.expired ? '已到期' : '有效期至'}} {{item.expiry}}</text></view>

@@ -4,7 +4,7 @@ export const roleSchema = z.enum(['student', 'coach', 'admin']);
 export const kindSchema = z.enum(['private', 'group']);
 export type Role = z.infer<typeof roleSchema>;
 export type Kind = z.infer<typeof kindSchema>;
-export interface User { id: string; name: string; phone: string; birthday?: string; roles: Role[]; status: 'pending' | 'active' | 'disabled' }
+export interface User { id: string; name: string; phone: string; birthday?: string; employmentType?: 'fullTime' | 'partTime'; roles: Role[]; status: 'pending' | 'active' | 'disabled' }
 export interface Session { id: string; kind: Kind; title: string; coachId: string; roomId: string; exclusive: boolean; start: number; end: number; capacity: number; reserved: number; cost: number; status: 'open' | 'closed' | 'rest'; cancelHours: number; cutoffMinutes: number; cancelReason?: string; cancelledAt?: number; cancelledBy?: string }
 export interface Package { id: string; memberId: string; kind: Kind; coachIds: string[]; available: number; frozen: number; consumed: number; total: number; expiresAt: number }
 export interface Booking { id: string; sessionId: string; memberId: string; packageId: string; cost: number; cancelHours: number; status: 'confirmed' | 'cancelled' | 'attended' | 'absent'; createdAt: number; cancelReason?: string }
@@ -29,6 +29,7 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('register'), name: z.string().trim().min(1).max(40), phone: z.string().regex(/^1\d{10}$/), birthday }).strict(),
   z.object({ action: z.literal('approve'), requestId, userId: id }).strict(),
   z.object({ action: z.literal('updateMember'), requestId, userId: id, name: z.string().trim().min(1).max(40), phone: z.string().regex(/^1\d{10}$/), birthday }).strict(),
+  z.object({ action: z.literal('updateCoachPay'), requestId, userId: id, employmentType: z.enum(['fullTime', 'partTime']) }).strict(),
   z.object({ action: z.literal('setCoach'), requestId, userId: id, enabled: z.boolean() }).strict(),
   z.object({ action: z.literal('purchase'), requestId, memberId: id, kind: kindSchema, coachIds: z.array(id).max(20), credits: count, expiresAt: time, amountFen: z.number().int().min(0).max(100000000), method: z.enum(['cash', 'transfer']), note: z.string().trim().min(1).max(200) }).strict(),
   z.object({ action: z.literal('publish'), requestId, kind: kindSchema, title: z.string().trim().min(1).max(60), coachId: id, roomId: z.string().trim().min(1).max(40), exclusive: z.boolean(), start: time, end: time, capacity: z.number().int().min(1).max(100), cost: z.number().int().min(1).max(100) }).strict(),

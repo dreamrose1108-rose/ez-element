@@ -94,6 +94,38 @@ test('管理员可维护学员姓名、手机号和生日，其他角色不能�
   assert.equal(member?.name, '新姓名'); assert.equal(member?.phone, '13900000000'); assert.equal(member?.birthday, '1996-06-18');
 });
 
+test('教练工资按全兼职制度核算今日收入和本月预估，爽约不计课时提成', async () => {
+  const f = await fixture();
+  await rejectsCode(f.call('student', 'updateCoachPay', { userId: userKey('coach'), employmentType: 'fullTime' }), 'FORBIDDEN');
+  await rejectsCode(f.call('admin', 'updateCoachPay', { userId: userKey('student'), employmentType: 'fullTime' }), 'FORBIDDEN');
+  await f.call('admin', 'updateCoachPay', { userId: userKey('coach'), employmentType: 'fullTime' });
+  const pack = await f.purchase('student', { coachIds: [userKey('coach')], amountFen: 200000 });
+  const attendedSession = await f.publish();
+  const absentSession = await f.publish({ start: f.now() + 2 * 86400000 + 2 * 3600000, end: f.now() + 2 * 86400000 + 3 * 3600000 });
+  const attended = await f.call('student', 'book', { sessionId: attendedSession.id, packageId: pack.id });
+  const absent = await f.call('student', 'book', { sessionId: absentSession.id, packageId: pack.id });
+  f.advance(2 * 86400000 + 4 * 3600000);
+  await f.call('coach', 'settle', { bookingId: attended.id, outcome: 'attended' });
+  await f.call('coach', 'settle', { bookingId: absent.id, outcome: 'absent' });
+  // 当天再登记一笔归属该教练的私教销售，使月业绩超过 6 万。
+  await f.purchase('student2', { coachIds: [userKey('coach')], amountFen: 6100000 });
+  const fullTime = (await f.service.execute('coach', { action: 'dashboard' }) as { coachPay: Record<string, number | string> }).coachPay;
+  assert.equal(fullTime.employmentType, 'fullTime');
+  assert.equal(fullTime.monthClassCount, 1); assert.equal(fullTime.todayClassCount, 1);
+  assert.equal(fullTime.monthClassRevenueFen, 20000); assert.equal(fullTime.classCommissionBps, 2000);
+  assert.equal(fullTime.monthClassCommissionFen, 4000); assert.equal(fullTime.todayClassCommissionFen, 4000);
+  assert.equal(fullTime.monthPerformanceFen, 6300000); assert.equal(fullTime.performanceCommissionBps, 1000);
+  assert.equal(fullTime.performanceCommissionFen, 630000); assert.equal(fullTime.todayPerformanceCommissionFen, 610000);
+  assert.equal(fullTime.baseSalaryFen, 220000); assert.equal(fullTime.bonusFen, 100000);
+  assert.equal(fullTime.estimatedTotalFen, 954000); assert.equal(fullTime.todayTotalFen, 614000);
+
+  await f.call('admin', 'updateCoachPay', { userId: userKey('coach'), employmentType: 'partTime' });
+  const partTime = (await f.service.execute('coach', { action: 'dashboard' }) as { coachPay: Record<string, number | string> }).coachPay;
+  assert.equal(partTime.employmentType, 'partTime'); assert.equal(partTime.classCommissionBps, 3000);
+  assert.equal(partTime.monthClassCommissionFen, 6000); assert.equal(partTime.performanceCommissionFen, 0);
+  assert.equal(partTime.baseSalaryFen, 0); assert.equal(partTime.bonusFen, 0); assert.equal(partTime.estimatedTotalFen, 6000);
+});
+
 test('购课 → 预约 → 取消 → 重新预约 → 出勤；幂等且账目可重建', async () => {
   const f = await fixture(); const p = await f.purchase(); const s = await f.publish();
   const input = { sessionId: s.id, packageId: p.id, requestId: 'same-booking-1' };

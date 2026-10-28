@@ -11,6 +11,15 @@ const navigation = {
   admin: [{ id: 'home', name: '工作台' }, { id: 'schedule', name: '课程排班' }, { id: 'account', name: '学员管理' }, { id: 'finance', name: '收款账务' }],
 };
 const statuses: Record<string, string> = { confirmed: '待上课', cancelled: '已取消', attended: '已到课', absent: '爽约已结算' };
+interface StaffMember { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean; employmentType: 'fullTime' | 'partTime'; employmentTypeName: string }
+interface CoachPayView {
+  employmentTypeName: string; month: string;
+  todayClassCount: number; todayClassRevenueLabel: string; todayClassCommissionLabel: string;
+  todayPerformanceLabel: string; todayPerformanceCommissionLabel: string; todayTotalLabel: string;
+  monthClassCount: number; classRateLabel: string; monthClassRevenueLabel: string; monthClassCommissionLabel: string;
+  monthPerformanceLabel: string; performanceRateLabel: string; performanceCommissionLabel: string;
+  baseSalaryLabel: string; bonusLabel: string; estimatedTotalLabel: string;
+}
 let snapshot: Dashboard = { profile: null };
 let dragAnchor = -1; let dragCurrent = -1;
 let dragRects: { top: number; bottom: number; left: number; right: number; dataset?: { index?: string | number } }[] = [];
@@ -25,10 +34,11 @@ Page({
     weekScheduleDays: [] as { key: string; label: string; short: string; slots: { key: string; day: string; index: number; startLabel: string; endLabel: string; displayTime: string; durationLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean; visible: boolean; span: number }[] }[],
     sessions: [] as object[], bookings: [] as object[], packs: [] as object[], messages: [] as object[], ledger: [] as object[], pending: [] as object[],
     users: [] as { id: string; name: string }[], memberIndex: 0, purchaseKindIndex: 0, kindNames: ['私教', '团课'],
-    staffMembers: [] as { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean }[],
-    memberQuery: '', memberFilter: 'all', filteredMembers: [] as { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean }[],
-    memberDetailId: '', memberDetail: null as null | { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean },
+    staffMembers: [] as StaffMember[],
+    memberQuery: '', memberFilter: 'all', filteredMembers: [] as StaffMember[],
+    memberDetailId: '', memberDetail: null as StaffMember | null,
     memberPacks: [] as object[], memberBookings: [] as object[],
+    coachPay: null as CoachPayView | null,
     totalAvailable: 0, totalFrozen: 0, totalConsumed: 0, myCount: 0,
     editing: null as null | { id: string; title: string; day: string; start: string; end: string; room: string; capacity: number; kind: string },
     copyCount: 0, copyEnd: '', copyTarget: '', copyTargetEnd: '', copyUnavailable: false,
@@ -45,7 +55,7 @@ Page({
       const role = available.includes(this.data.role) ? this.data.role : available[0] || 'student';
       this.setData({ navItems: navigation[role], tab: navigation[role].some(item => item.id === this.data.tab) ? this.data.tab : 'home' });
       this.setData({ profile: snapshot.profile, role, roleName: roleNames[role], roles: available.map(id => ({ id, name: roleNames[id] })), coaches: snapshot.coaches || [], users: (snapshot.users || []).filter(u => u.status === 'active' && u.roles.includes('student')).map(u => ({ id: u.id, name: u.name })), pending: (snapshot.users || []).filter(u => u.status === 'pending') });
-      this.setData({ coachIndex: Math.min(this.data.coachIndex, Math.max(0, this.data.coaches.length - 1)), staffMembers: (snapshot.users || []).filter(u => u.status === 'active' && (u.roles.includes('student') || u.roles.includes('coach'))).map(u => ({ id: u.id, name: u.name, phone: u.phone, birthday: u.birthday || '', shortId: u.id.slice(-6), isCoach: u.roles.includes('coach') })) });
+      this.setData({ coachIndex: Math.min(this.data.coachIndex, Math.max(0, this.data.coaches.length - 1)), staffMembers: (snapshot.users || []).filter(u => u.status === 'active' && (u.roles.includes('student') || u.roles.includes('coach'))).map(u => { const employmentType = u.employmentType || 'fullTime'; return { id: u.id, name: u.name, phone: u.phone, birthday: u.birthday || '', shortId: u.id.slice(-6), isCoach: u.roles.includes('coach'), employmentType, employmentTypeName: employmentType === 'fullTime' ? '全职' : '兼职' }; }) });
       this.renderData();
       this.renderMembers();
     } catch (e) { this.setData({ error: e instanceof Error ? e.message : '加载失败' }); }
@@ -83,8 +93,17 @@ Page({
     const copySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && s.start >= sourceStart && s.start < sourceStart + 7 * 86400000);
     this.setData({ scheduleSlots, weekScheduleDays, copyCount: copySlots.length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
     const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, statusClass: `status-${b.status}`, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), unitPriceLabel: b.unitPriceFen === undefined ? '' : money(b.unitPriceFen), settleAmountLabel: b.settleAmountFen === undefined ? '' : money(b.settleAmountFen), totalAmountLabel: b.totalAmountFen === undefined ? '' : money(b.totalAmountFen), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
+    const pay = snapshot.coachPay;
+    const coachPay: CoachPayView | null = this.data.role === 'coach' && pay ? {
+      employmentTypeName: pay.employmentType === 'fullTime' ? '全职' : '兼职', month: pay.month,
+      todayClassCount: pay.todayClassCount, todayClassRevenueLabel: money(pay.todayClassRevenueFen), todayClassCommissionLabel: money(pay.todayClassCommissionFen),
+      todayPerformanceLabel: money(pay.todayPerformanceFen), todayPerformanceCommissionLabel: money(pay.todayPerformanceCommissionFen), todayTotalLabel: money(pay.todayTotalFen),
+      monthClassCount: pay.monthClassCount, classRateLabel: `${(pay.classCommissionBps / 100).toFixed(0)}%`, monthClassRevenueLabel: money(pay.monthClassRevenueFen), monthClassCommissionLabel: money(pay.monthClassCommissionFen),
+      monthPerformanceLabel: money(pay.monthPerformanceFen), performanceRateLabel: `${(pay.performanceCommissionBps / 100).toFixed(0)}%`, performanceCommissionLabel: money(pay.performanceCommissionFen),
+      baseSalaryLabel: money(pay.baseSalaryFen), bonusLabel: money(pay.bonusFen), estimatedTotalLabel: money(pay.estimatedTotalFen),
+    } : null;
     const rosterIds = new Set(bookings.map(b => b.memberId));
-    this.setData({ todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
+    this.setData({ coachPay, todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
     const packs = (snapshot.packages || []).filter(p => this.data.role === 'admin' || p.memberId === profile?.id);
     const messages = (snapshot.inbox || []).filter(m => this.data.role === 'admin' || m.userId === profile?.id);
     const visibleLedger = (snapshot.ledger || []).filter(l => this.data.role === 'admin' || l.memberId === profile?.id);
@@ -242,6 +261,11 @@ Page({
     if (this.data.role !== 'admin' || !this.data.memberDetail || this.data.busy) return;
     if (!this.data.memberDetail.birthday) { this.setData({ error: '请选择生日' }); return; }
     await this.mutate({ action: 'updateMember', userId: this.data.memberDetail.id, ...e.detail.value, birthday: this.data.memberDetail.birthday }, '基础资料已保存');
+  },
+  async updateCoachPay(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.role !== 'admin' || !this.data.memberDetail?.isCoach || this.data.busy) return;
+    const employmentType = String(e.currentTarget.dataset.type) === 'partTime' ? 'partTime' : 'fullTime';
+    await this.mutate({ action: 'updateCoachPay', userId: this.data.memberDetail.id, employmentType }, `已设为${employmentType === 'fullTime' ? '全职' : '兼职'}教练`);
   },
   choosePublishStart(e: WechatMiniprogram.PickerChange) { this.setData({ publishStart: String(e.detail.value), error: '' }); },
   choosePublishEnd(e: WechatMiniprogram.PickerChange) { this.setData({ publishEnd: String(e.detail.value), error: '' }); },
