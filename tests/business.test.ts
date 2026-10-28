@@ -167,6 +167,21 @@ test('有预约的私教时段不能关闭；空闲时段关闭后可重新排�
   await f.publish();
 });
 
+test('点击时间格可在排课、休息和未安排间切换；已约状态不能覆盖', async () => {
+  const f = await fixture();
+  const start = f.now() + 3 * 86400000; const end = start + 3600000;
+  const rest = await f.call('coach', 'setSlotState', { coachId: userKey('coach'), start, end, state: 'rest' });
+  let session = (await f.get('sessions')).find(s => s.id === rest.id)!;
+  assert.equal(session.status, 'rest'); assert.equal(session.title, '休息');
+  await rejectsCode(f.publish({ start, end }), 'CONFLICT');
+  await f.call('coach', 'setSlotState', { coachId: userKey('coach'), sessionId: rest.id, start, end, state: 'open' });
+  session = (await f.get('sessions')).find(s => s.id === rest.id)!;
+  assert.equal(session.status, 'open'); assert.equal(session.title, '专属力量训练');
+  const pack = await f.purchase();
+  await f.call('student', 'book', { sessionId: rest.id, packageId: pack.id });
+  await rejectsCode(f.call('coach', 'setSlotState', { coachId: userKey('coach'), sessionId: rest.id, start, end, state: 'rest' }), 'BOOKED');
+});
+
 test('失败事务完整回滚；请求键不能用于不同操作；非法负金额被拒绝', async () => {
   const f = await fixture(); const p = await f.purchase(); const s = await f.publish();
   const input = { sessionId: s.id, packageId: p.id, requestId: 'shared-request-1' };

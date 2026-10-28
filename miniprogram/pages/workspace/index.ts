@@ -18,7 +18,7 @@ Page({
     navItems: navigation.student, todayClasses: 0, unsettledCount: 0, coachRoster: [] as { id: string; name: string }[],
     days: Array.from({ length: 7 }, (_, i) => { const key = dayKey(Date.now() + i * 86400000); return { key, short: key.slice(5), label: i === 0 ? '今天' : ['日', '一', '二', '三', '四', '五', '六'][new Date(`${key}T12:00:00+08:00`).getUTCDay()] }; }),
     day: dayKey(Date.now()), kind: 'private', coachIndex: 0, coaches: [] as { id: string; name: string }[],
-    publishStart: '', publishEnd: '',
+    publishStart: '', publishEnd: '', scheduleSlots: [] as { key: string; startLabel: string; endLabel: string; state: string; stateName: string; sessionId: string; start: number; end: number; disabled: boolean }[],
     sessions: [] as object[], bookings: [] as object[], packs: [] as object[], messages: [] as object[], ledger: [] as object[], pending: [] as object[],
     users: [] as { id: string; name: string }[], memberIndex: 0, purchaseKindIndex: 0, kindNames: ['私教', '团课'],
     staffMembers: [] as { id: string; name: string; shortId: string; isCoach: boolean }[],
@@ -52,9 +52,18 @@ Page({
     const coaches = snapshot.coaches || []; const coach = coaches[this.data.coachIndex];
     const sessions = all.filter(s => dayKey(s.start) === this.data.day && s.status === 'open' && (this.data.role === 'student' ? s.kind === this.data.kind && (s.kind === 'group' || !coach || s.coachId === coach.id) : this.data.role === 'coach' ? s.coachId === profile?.id : true)).sort((a, b) => a.start - b.start).map(s => ({ ...s, startLabel: time(s.start), endLabel: time(s.end), coachName: coaches.find(c => c.id === s.coachId)?.name || '教练', kindName: s.kind === 'private' ? '私教' : '团课', free: s.capacity - s.reserved, canBook: s.reserved < s.capacity && s.start - now >= s.cutoffMinutes * 60000, canCancelSession: this.data.role === 'admin' && s.start > now, canClose: s.reserved === 0 && s.start > now && (this.data.role === 'admin' || s.kind === 'private') }));
     const sourceStart = Date.parse(`${this.data.day}T00:00:00+08:00`);
+    const scheduleCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
+    const scheduleSlots = this.data.role === 'student' || this.data.kind === 'group' ? [] : Array.from({ length: 14 }, (_, index) => {
+      const start = sourceStart + (index + 8) * 3600000; const end = start + 3600000;
+      const session = all.find(s => s.coachId === scheduleCoach && (s.status === 'open' || s.status === 'rest') && s.start < end && start < s.end);
+      const exact = !!session && session.start === start && session.end === end && session.kind === 'private';
+      const state = !session ? 'free' : session.status === 'rest' ? 'rest' : session.reserved > 0 ? 'booked' : 'scheduled';
+      const stateName = ({ free: '未安排', rest: '休息', booked: '已约', scheduled: '已排课' } as Record<string, string>)[state] || '未安排';
+      return { key: `${this.data.day}-${index + 8}`, startLabel: time(start), endLabel: time(end), state, stateName, sessionId: exact ? session!.id : '', start, end, disabled: start <= now || (!!session && !exact) || state === 'booked' };
+    });
     const copyCoach = this.data.role === 'coach' ? profile?.id : coach?.id;
     const copySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && s.start >= sourceStart && s.start < sourceStart + 7 * 86400000);
-    this.setData({ copyCount: copySlots.length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
+    this.setData({ scheduleSlots, copyCount: copySlots.length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
     const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
     const rosterIds = new Set(bookings.map(b => b.memberId));
     this.setData({ todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
@@ -80,7 +89,7 @@ Page({
     this.setData({ memberDetailId: String(e.currentTarget.dataset.id) }); this.renderMembers();
   },
   closeMember() { this.setData({ memberDetailId: '', memberDetail: null, memberPacks: [], memberBookings: [] }); },
-  switchRole(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const role = e.currentTarget.dataset.role as Role; if (!this.data.roles.some(r => r.id === role)) return; this.closeMember(); this.setData({ role, roleName: roleNames[role], navItems: navigation[role], tab: 'home', selectedId: '', editing: null }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); this.refresh(); },
+  switchRole(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const role = e.currentTarget.dataset.role as Role; if (!this.data.roles.some(r => r.id === role)) return; this.closeMember(); this.setData({ role, roleName: roleNames[role], navItems: navigation[role], tab: 'home', kind: role === 'coach' ? 'private' : this.data.kind, selectedId: '', editing: null }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); this.refresh(); },
   switchTab(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const tab = String(e.currentTarget.dataset.tab); if (!navigation[this.data.role].some(item => item.id === tab)) return; this.closeMember(); this.setData({ tab, selectedId: '', editing: null }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); },
   chooseDay(e: WechatMiniprogram.TouchEvent) { this.setData({ day: String(e.currentTarget.dataset.day) }); this.renderData(); },
   chooseScheduleDate(e: WechatMiniprogram.PickerChange) { this.setData({ day: String(e.detail.value) }); this.renderData(); },
@@ -89,6 +98,22 @@ Page({
   chooseMember(e: WechatMiniprogram.PickerChange) { this.setData({ memberIndex: Number(e.detail.value) }); },
   choosePurchaseKind(e: WechatMiniprogram.PickerChange) { this.setData({ purchaseKindIndex: Number(e.detail.value) }); },
   choosePackage(e: WechatMiniprogram.PickerChange) { this.setData({ packageIndex: Number(e.detail.value) }); },
+  async tapScheduleSlot(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.busy || this.data.role === 'student') return;
+    const slot = this.data.scheduleSlots.find(item => item.key === String(e.currentTarget.dataset.key));
+    if (!slot) return;
+    if (slot.state === 'booked') { await wx.showModal({ title: '该时段已约', content: '已有学员预约，不能改为休息或取消排课。请在课程详情中处理预约。', showCancel: false }); return; }
+    if (slot.disabled) { await wx.showModal({ title: '暂不可修改', content: slot.start <= Date.now() ? '已开始或已过去的时间不能调整。' : '该课程跨越多个时间格，请在课程详情中编辑。', showCancel: false }); return; }
+    const options = slot.state === 'free' ? ['排课', '标记休息'] : slot.state === 'rest' ? ['改为排课', '取消休息'] : ['标记休息', '取消排课'];
+    let choice: WechatMiniprogram.ShowActionSheetSuccessCallbackResult;
+    try { choice = await wx.showActionSheet({ itemList: options }); } catch { return; }
+    const state = slot.state === 'free' ? (choice.tapIndex === 0 ? 'open' : 'rest')
+      : slot.state === 'rest' ? (choice.tapIndex === 0 ? 'open' : 'clear')
+      : (choice.tapIndex === 0 ? 'rest' : 'clear');
+    const coachId = this.data.role === 'coach' ? snapshot.profile?.id : this.data.coaches[this.data.coachIndex]?.id;
+    if (!coachId) { this.setData({ error: '请先选择教练' }); return; }
+    await this.mutate({ action: 'setSlotState', coachId, ...(slot.sessionId ? { sessionId: slot.sessionId } : {}), start: slot.start, end: slot.end, state }, state === 'open' ? '已排课' : state === 'rest' ? '已标记休息' : '已清除');
+  },
   selectSession(e: WechatMiniprogram.TouchEvent) {
     const s = (snapshot.sessions || []).find(s => s.id === e.currentTarget.dataset.id); if (!s) return;
     const eligible = (snapshot.packages || []).filter(p => p.memberId === snapshot.profile?.id && p.kind === s.kind && p.available >= s.cost && p.expiresAt >= s.start && (p.kind !== 'private' || p.coachIds.includes(s.coachId))).sort((a, b) => a.expiresAt - b.expiresAt).map(p => ({ id: p.id, label: `${p.kind === 'private' ? '私教' : '团课'} · 余 ${p.available} 节 · ${dayKey(p.expiresAt)} 到期` }));
@@ -117,8 +142,9 @@ Page({
   async saveSlot(e: WechatMiniprogram.FormSubmit) {
     const edit = this.data.editing; if (!edit || this.data.busy) return;
     const v = e.detail.value as Record<string, string>;
-    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v.start || '') || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v.end || '')) { this.setData({ error: '请输入有效的 24 小时时间，如 09:00' }); return; }
-    const start = Date.parse(`${edit.day}T${v.start}:00+08:00`), end = Date.parse(`${edit.day}T${v.end}:00+08:00`);
+    const startText = this.data.role === 'coach' ? edit.start : v.start || '', endText = this.data.role === 'coach' ? edit.end : v.end || '';
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startText) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(endText)) { this.setData({ error: '请输入有效的 24 小时时间，如 09:00' }); return; }
+    const start = Date.parse(`${edit.day}T${startText}:00+08:00`), end = Date.parse(`${edit.day}T${endText}:00+08:00`);
     if (start <= Date.now() || end <= start || end - start > 4 * 3600000) { this.setData({ error: '课程须在未来，同一天内且不超过四小时' }); return; }
     await this.mutate({ action: 'editSlot', sessionId: edit.id, title: v.title, roomId: v.room, start, end, capacity: edit.kind === 'private' ? 1 : Number(v.capacity) }, '时段已更新');
     if (!this.data.editing) { this.setData({ day: edit.day }); this.renderData(); }

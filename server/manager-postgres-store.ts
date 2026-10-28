@@ -64,7 +64,7 @@ export class ManagerPostgresStore implements Store {
         hasCoachWork: async (coachId, now) => {
           const sessions = Object.values(snapshot.tables.sessions).filter(s => s.coachId === coachId);
           const ids = new Set(sessions.map(s => s.id));
-          return sessions.some(s => s.status === 'open' && s.end > now) || Object.values(snapshot.tables.bookings).some(b => b.status === 'confirmed' && ids.has(b.sessionId));
+          return sessions.some(s => (s.status === 'open' || s.status === 'rest') && s.end > now) || Object.values(snapshot.tables.bookings).some(b => b.status === 'confirmed' && ids.has(b.sessionId));
         },
         get: async <K extends Table>(table: K, id: string) => {
           const value = snapshot.tables[table][id];

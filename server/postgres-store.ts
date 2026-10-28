@@ -31,7 +31,7 @@ export class PostgresStore implements Store {
           hasCoachWork: async (coachId, now) => {
             const result = await client.query(`SELECT EXISTS (
               SELECT 1 FROM public.ez_sessions s WHERE s.data->>'coachId' = $1 AND
-                ((s.data->>'status' = 'open' AND (s.data->>'end')::bigint > $2) OR EXISTS (
+                ((s.data->>'status' IN ('open', 'rest') AND (s.data->>'end')::bigint > $2) OR EXISTS (
                   SELECT 1 FROM public.ez_bookings b WHERE b.data->>'sessionId' = s.id AND b.data->>'status' = 'confirmed'
                 ))) AS pending`, [coachId, now]);
             return result.rows[0].pending === true;

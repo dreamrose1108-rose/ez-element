@@ -37,17 +37,27 @@
       <picker wx:if="{{role !== 'student'}}" mode="date" value="{{day}}" bindchange="chooseScheduleDate"><view class="picker">排课日期：{{day}} · 查看其他日期 ›</view></picker>
       <view class="segments" wx:if="{{role !== 'coach'}}"><button class="{{kind === 'private' ? 'selected' : ''}}" data-kind="private" bindtap="chooseKind">私教预约</button><button class="{{kind === 'group' ? 'selected' : ''}}" data-kind="group" bindtap="chooseKind">团课场次</button></view>
       <picker wx:if="{{role !== 'coach'}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">教练：{{coaches[coachIndex].name || '暂无教练'}} <text>更换 ›</text></view></picker>
-      <view wx:if="{{role !== 'student'}}" class="card publish-card">
-        <view class="title">{{role === 'coach' ? '新增当天可约时段' : '发布课程场次'}}</view>
-        <text class="muted">{{day}} · {{role === 'coach' || kind === 'private' ? '一对一私教' : '多人团课'}}</text>
+      <view wx:if="{{role !== 'student' && kind !== 'group'}}" class="card slot-board">
+        <view class="row"><view><view class="title">点击时间安排状态</view><text class="muted">{{day}} · 每格 1 小时</text></view><text class="badge">08:00–22:00</text></view>
+        <view class="slot-legend"><text class="free">未安排</text><text class="scheduled">已排课</text><text class="booked">已约</text><text class="rest">休息</text></view>
+        <view class="schedule-slot-grid">
+          <button wx:for="{{scheduleSlots}}" wx:key="key" class="schedule-slot {{item.state}} {{item.disabled ? 'disabled' : ''}}" data-key="{{item.key}}" bindtap="tapScheduleSlot" disabled="{{busy}}">
+            <text class="slot-time">{{item.startLabel}}</text><text class="slot-state">{{item.stateName}}</text><text class="slot-end">至 {{item.endLabel}}</text>
+          </button>
+        </view>
+        <text class="muted">点击“未安排”可排课或标记休息；“已约”由预约自动生成，不能手动覆盖。</text>
+      </view>
+      <view wx:if="{{role === 'admin' && kind === 'group'}}" class="card publish-card">
+        <view class="title">发布团课场次</view>
+        <text class="muted">{{day}} · 多人团课</text>
         <form bindsubmit="publish">
           <view class="time-picker-row">
             <picker mode="time" value="{{publishStart || '09:00'}}" bindchange="choosePublishStart" disabled="{{busy}}"><view class="picker"><text class="muted">开始时间</text><view class="time-value">{{publishStart || '请选择'}} ▾</view></view></picker>
             <picker mode="time" value="{{publishEnd || '10:00'}}" bindchange="choosePublishEnd" disabled="{{busy}}"><view class="picker"><text class="muted">结束时间</text><view class="time-value">{{publishEnd || '请选择'}} ▾</view></view></picker>
           </view>
-          <input name="title" placeholder="课程名称" value="{{role === 'coach' || kind === 'private' ? '专属力量训练' : '活力燃脂团课'}}"/>
+          <input name="title" placeholder="课程名称" value="活力燃脂团课"/>
           <input name="room" placeholder="上课地点" value="开放区"/>
-          <input wx:if="{{role === 'admin' && kind === 'group'}}" name="capacity" type="number" placeholder="团课人数上限" value="10"/>
+          <input name="capacity" type="number" placeholder="团课人数上限" value="10"/>
           <text class="muted">24 小时制，单次不超过 4 小时；发布后学员可预约。</text>
           <button class="primary wide" form-type="submit" disabled="{{busy}}">发布时段</button>
         </form>
@@ -105,10 +115,11 @@
   <view class="row"><text class="page-title">编辑未预约时段</text><button class="compact secondary" bindtap="dismissEdit" disabled="{{busy}}">关闭</button></view>
   <text class="muted">教练、课程类型和课时保持不变；有预约或时间冲突时无法保存。</text>
   <view wx:if="{{error}}" class="error">{{error}}</view>
-  <picker mode="date" value="{{editing.day}}" bindchange="changeEditDate" disabled="{{busy}}"><view class="picker">上课日期：{{editing.day}} ›</view></picker>
+  <picker wx:if="{{role === 'admin'}}" mode="date" value="{{editing.day}}" bindchange="changeEditDate" disabled="{{busy}}"><view class="picker">上课日期：{{editing.day}} ›</view></picker>
+  <view wx:else class="picker">时段：{{editing.day}} {{editing.start}}–{{editing.end}}</view>
   <form bindsubmit="saveSlot">
     <text class="muted">课程名称</text><input name="title" value="{{editing.title}}" maxlength="60" disabled="{{busy}}"/>
-    <text class="muted">开始 / 结束时间（24 小时制）</text><view class="row"><input name="start" value="{{editing.start}}" placeholder="09:00" disabled="{{busy}}"/><input name="end" value="{{editing.end}}" placeholder="10:00" disabled="{{busy}}"/></view>
+    <block wx:if="{{role === 'admin'}}"><text class="muted">开始 / 结束时间（24 小时制）</text><view class="row"><input name="start" value="{{editing.start}}" placeholder="09:00" disabled="{{busy}}"/><input name="end" value="{{editing.end}}" placeholder="10:00" disabled="{{busy}}"/></view></block>
     <text class="muted">上课地点</text><input name="room" value="{{editing.room}}" maxlength="40" disabled="{{busy}}"/>
     <block wx:if="{{editing.kind === 'group'}}"><text class="muted">人数上限</text><input name="capacity" type="number" value="{{editing.capacity}}" disabled="{{busy}}"/></block>
     <button class="primary save-slot" form-type="submit" disabled="{{busy}}">保存修改</button>

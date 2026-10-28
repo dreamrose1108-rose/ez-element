@@ -112,6 +112,41 @@ export class GymService {
       for (const owner of owners) await schedule(tx, owner, s, s.id, true);
       await tx.put('sessions', s); return { id: s.id };
     }
+    if (cmd.action === 'setSlotState') {
+      requireThat(hasRole(actor, 'admin') || (hasRole(actor, 'coach') && cmd.coachId === actor.id), 'FORBIDDEN', '只能维护自己的排班');
+      role(await user(tx, cmd.coachId), 'coach');
+      requireThat(cmd.end > cmd.start && cmd.start > now && cmd.end - cmd.start === 3600000 && dayKey(cmd.start) === dayKey(cmd.end - 1), 'TIME', '请选择未来的一小时时段');
+      const existing = cmd.sessionId ? await tx.get('sessions', cmd.sessionId) : undefined;
+      if (existing) {
+        requireThat(existing.coachId === cmd.coachId && existing.start === cmd.start && existing.end === cmd.end && existing.kind === 'private', 'STATE', '排班状态已变化，请刷新后重试');
+        requireThat(existing.status === 'open' || existing.status === 'rest', 'STATE', '该时段已关闭，请刷新后重试');
+        requireThat(existing.reserved === 0, 'BOOKED', '该时段已有预约，不能修改排班状态');
+        if (cmd.state === 'clear') {
+          existing.status = 'closed';
+          for (const owner of [`coach:${existing.coachId}`, ...(existing.exclusive ? [`room:${existing.roomId}`] : [])].sort()) await schedule(tx, owner, existing, existing.id, false);
+        } else {
+          if (existing.exclusive) {
+            await schedule(tx, `room:${existing.roomId}`, existing, existing.id, false);
+            existing.exclusive = false;
+          }
+          existing.status = cmd.state;
+          existing.title = cmd.state === 'rest' ? '休息' : '专属力量训练';
+          existing.roomId = cmd.state === 'rest' ? '休息' : '开放区';
+        }
+        await tx.put('sessions', existing);
+        return { id: existing.id };
+      }
+      requireThat(cmd.state !== 'clear', 'STATE', '该时段尚未安排');
+      const session: Session = {
+        id: operation, kind: 'private', title: cmd.state === 'rest' ? '休息' : '专属力量训练',
+        coachId: cmd.coachId, roomId: cmd.state === 'rest' ? '休息' : '开放区', exclusive: false,
+        start: cmd.start, end: cmd.end, capacity: 1, reserved: 0, cost: 1, status: cmd.state,
+        cancelHours: rules.privateCancelHours, cutoffMinutes: rules.cutoffMinutes,
+      };
+      await schedule(tx, `coach:${session.coachId}`, session, session.id, true);
+      await tx.put('sessions', session);
+      return { id: session.id };
+    }
     if (cmd.action === 'editSlot') {
       const source = await tx.get('sessions', cmd.sessionId);
       requireThat(source, 'NOT_FOUND', '场次不存在');

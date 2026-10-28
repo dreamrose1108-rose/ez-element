@@ -21,3 +21,21 @@
 .time-picker-row .picker{display:block;}
 .time-value{font-size:36rpx;font-weight:700;margin-top:8rpx;}
 .publish-card .primary{margin-top:20rpx;}
+.slot-board{padding:24rpx;}
+.slot-legend{display:flex;gap:10rpx;flex-wrap:wrap;margin:20rpx 0 14rpx;}
+.slot-legend text{padding:8rpx 14rpx;border-radius:999rpx;font-size:22rpx;font-weight:700;}
+.slot-legend .free{background:#ececea;color:#686a6d;}
+.slot-legend .scheduled{background:#fff0a8;color:#6a5200;}
+.slot-legend .booked{background:#252629;color:#f5cf38;}
+.slot-legend .rest{background:#dfe4e7;color:#495057;}
+.schedule-slot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14rpx;margin-bottom:18rpx;}
+.schedule-slot{display:flex;flex-direction:column;align-items:flex-start;min-width:0;margin:0;padding:20rpx;border:2rpx solid transparent;border-radius:16rpx;line-height:1.2;text-align:left;}
+.schedule-slot::after{display:none;}
+.schedule-slot.free{background:#f1f1ef;color:#55585b;border-color:#dededb;}
+.schedule-slot.scheduled{background:#fff4bd;color:#4d410c;border-color:#f5cf38;}
+.schedule-slot.booked{background:#252629;color:#f5cf38;border-color:#252629;}
+.schedule-slot.rest{background:#e1e6e8;color:#454b50;border-color:#c9d0d4;}
+.schedule-slot.disabled{opacity:.55;}
+.slot-time{font-size:34rpx;font-weight:800;}
+.slot-state{font-size:24rpx;font-weight:700;margin-top:8rpx;}
+.slot-end{font-size:20rpx;opacity:.7;margin-top:6rpx;}
