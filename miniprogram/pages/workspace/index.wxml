@@ -18,15 +18,6 @@
       <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
       <view wx:if="{{role === 'student'}}" class="metrics"><view><text class="number">{{totalAvailable}}</text><text>可用课时</text></view><view><text class="number">{{totalFrozen}}</text><text>已冻结</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
       <view wx:if="{{role !== 'student'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{role === 'admin' ? pending.length : myCount}}</text><text>{{role === 'admin' ? '待审核学员' : '待上课预约'}}</text></view></view>
-      <view wx:if="{{role === 'coach' && coachPay}}" class="pay-card">
-        <view class="row"><view><text class="pay-eyebrow">今日收入 · {{coachPay.employmentTypeName}}</text><view class="pay-title">{{coachPay.todayTotalLabel}}</view></view><text class="pay-chip">按当前月档位</text></view>
-        <view class="pay-metrics"><view><text>{{coachPay.todayClassCommissionLabel}}</text><text>课时提成</text></view><view><text>{{coachPay.todayPerformanceCommissionLabel}}</text><text>业绩提成</text></view><view><text>{{coachPay.todayClassCount}}</text><text>已到课节数</text></view></view>
-        <text class="pay-detail">今日到课对应实收 {{coachPay.todayClassRevenueLabel}}；今日归属业绩 {{coachPay.todayPerformanceLabel}}。业绩档位变化时，今日预估会随本月最终档位调整。</text>
-        <view class="pay-divider"></view>
-        <view class="row"><view><text class="pay-eyebrow">{{coachPay.month}} 本月工资预估</text><view class="pay-total">{{coachPay.estimatedTotalLabel}}</view></view><text class="pay-chip">{{coachPay.monthClassCount}} 节课</text></view>
-        <view class="pay-breakdown"><text>底薪 {{coachPay.baseSalaryLabel}}</text><text>课时提成 {{coachPay.monthClassCommissionLabel}}（{{coachPay.classRateLabel}}）</text><text>业绩提成 {{coachPay.performanceCommissionLabel}}（{{coachPay.performanceRateLabel}}）</text><text wx:if="{{coachPay.bonusLabel !== '¥0.00'}}">超 6 万奖励 {{coachPay.bonusLabel}}</text></view>
-        <text class="pay-detail">月课时对应实收 {{coachPay.monthClassRevenueLabel}}；归属业绩 {{coachPay.monthPerformanceLabel}}。全职社保及津贴金额尚未配置，不计入本页合计。</text>
-      </view>
       <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
       <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
@@ -122,6 +113,20 @@
       <view class="section">课时流水</view><view class="ledger" wx:for="{{ledger}}" wx:key="id"><view><text>{{item.title}}</text><text class="muted">{{item.date}}</text></view><view class="muted">可用 {{item.delta.available}} / 冻结 {{item.delta.frozen}} / 消耗 {{item.delta.consumed}}</view></view>
       </block>
       <block wx:if="{{role === 'coach'}}"><view class="page-title">授课学员</view><text class="muted">按当前已加载的授课预约整理</text><view wx:for="{{coachRoster}}" wx:key="id" class="card"><text class="title">{{item.name}}</text><text class="muted">查看授课出勤页可处理对应预约</text></view><view wx:if="{{!coachRoster.length}}" class="empty">暂无授课学员</view></block>
+    </block>
+    <block wx:if="{{role === 'coach' && tab === 'income'}}">
+      <view class="page-title">我的收入</view><text class="muted">收入随出勤结算和课包实收自动更新</text>
+      <view wx:if="{{coachPay}}" class="pay-card">
+        <view class="row"><view><text class="pay-eyebrow">今日收入 · {{coachPay.employmentTypeName}}</text><view class="pay-title">{{coachPay.todayTotalLabel}}</view></view><text class="pay-chip">按当前月档位</text></view>
+        <view class="pay-metrics"><view><text>{{coachPay.todayClassCommissionLabel}}</text><text>课时提成</text></view><view><text>{{coachPay.todayPerformanceCommissionLabel}}</text><text>业绩提成</text></view><view><text>{{coachPay.todayClassCount}}</text><text>已到课节数</text></view></view>
+        <text class="pay-detail">今日到课对应实收 {{coachPay.todayClassRevenueLabel}}；今日归属业绩 {{coachPay.todayPerformanceLabel}}。业绩档位变化时，今日预估会随本月最终档位调整。</text>
+        <view class="pay-divider"></view>
+        <view class="row"><view><text class="pay-eyebrow">{{coachPay.month}} 本月工资预估</text><view class="pay-total">{{coachPay.estimatedTotalLabel}}</view></view><text class="pay-chip">{{coachPay.monthClassCount}} 节课</text></view>
+        <view class="pay-breakdown"><text>底薪 {{coachPay.baseSalaryLabel}}</text><text>课时提成 {{coachPay.monthClassCommissionLabel}}（{{coachPay.classRateLabel}}）</text><text>业绩提成 {{coachPay.performanceCommissionLabel}}（{{coachPay.performanceRateLabel}}）</text><text wx:if="{{coachPay.bonusLabel !== '¥0.00'}}">超 6 万奖励 {{coachPay.bonusLabel}}</text></view>
+        <text class="pay-detail">月课时对应实收 {{coachPay.monthClassRevenueLabel}}；归属业绩 {{coachPay.monthPerformanceLabel}}。全职社保及津贴金额尚未配置，不计入本页合计。</text>
+      </view>
+      <view wx:else class="empty">工资数据暂未生成，请稍后刷新。</view>
+      <view class="notice">课时收入只统计已确认到课；爽约消课不计教练课时收入。私教课包实收计入绑定教练业绩，多位绑定教练平均分摊。</view>
     </block>
     <block wx:if="{{role === 'admin' && tab === 'finance'}}"><view class="page-title">收款与课时账务</view><text class="muted">线下确认到账，再登记开卡</text><view class="section">线下收款登记</view><view class="card"><text class="muted">确认已收到款项后登记；当前表单记录转账收款。</text><picker range="{{users}}" range-key="name" value="{{memberIndex}}" bindchange="chooseMember"><view class="picker">学员：{{users[memberIndex].name || '暂无已审核学员'}} ›</view></picker><picker range="{{kindNames}}" value="{{purchaseKindIndex}}" bindchange="choosePurchaseKind"><view class="picker">课包类型：{{kindNames[purchaseKindIndex]}} ›</view></picker><picker wx:if="{{purchaseKindIndex === 0}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">绑定教练：{{coaches[coachIndex].name || '暂无教练'}} ›</view></picker><form bindsubmit="purchase"><input name="credits" type="number" placeholder="课时数量"/><input name="amount" type="digit" placeholder="实际收款（元）"/><input name="expiry" placeholder="有效期，如 2027-04-27"/><input name="note" placeholder="收款凭据 / 备注（必填）"/><button class="primary" form-type="submit" disabled="{{busy || !users.length}}">确认已收款并开卡</button></form></view>      <view class="section">课时流水</view><view class="ledger" wx:for="{{ledger}}" wx:key="id"><view><text>{{item.title}}</text><text class="muted">{{item.date}}</text></view><view class="muted">可用 {{item.delta.available}} / 冻结 {{item.delta.frozen}} / 消耗 {{item.delta.consumed}}</view></view></block>
     <block wx:if="{{tab === 'messages' || (role === 'admin' && tab === 'home')}}"><view class="page-title">消息通知</view><text class="muted">扣课通知保存在这里；微信服务通知尚未接入。</text><view wx:for="{{messages}}" wx:key="id" class="card"><view class="title">{{item.title}}</view><view wx:if="{{item.detail}}" class="receipt-detail">{{item.detail}}</view><text class="muted">{{item.date}}</text></view><view wx:if="{{!messages.length}}" class="empty">暂无消息</view></block>

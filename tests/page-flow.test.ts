@@ -83,6 +83,8 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   assert.ok(!(p.data.coaches as { id: string }[]).some(u => u.id === userKey('student')));
   const idle = async () => { for (let i = 0; i < 30; i++) { await new Promise<void>(r => setImmediate(r)); if (!p.data.busy) return; } assert.fail('page did not settle'); };
   p.setData({ role: 'coach' }); await p.refresh();
+  assert.equal((p.data.navItems as { id: string }[]).map(n => n.id).join(','), 'home,schedule,account,income,messages');
+  navPage.switchTab({ currentTarget: { dataset: { tab: 'income' } } }); assert.equal(p.data.tab, 'income');
   const pay = p.data.coachPay as { employmentTypeName: string; baseSalaryLabel: string; monthPerformanceLabel: string; estimatedTotalLabel: string };
   assert.equal(pay.employmentTypeName, '全职'); assert.equal(pay.baseSalaryLabel, '¥2200.00');
   assert.equal(pay.monthPerformanceLabel, '¥100.00'); assert.equal(pay.estimatedTotalLabel, '¥2200.00');

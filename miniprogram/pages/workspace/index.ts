@@ -7,7 +7,7 @@ const money = (fen: number) => `¥${(fen / 100).toFixed(2)}`;
 const roleNames = { student: '学员端', coach: '教练端', admin: '管理端' };
 const navigation = {
   student: [{ id: 'home', name: '我的课程' }, { id: 'schedule', name: '预约训练' }, { id: 'account', name: '我的课包' }, { id: 'messages', name: '消息' }],
-  coach: [{ id: 'home', name: '授课出勤' }, { id: 'schedule', name: '我的排班' }, { id: 'account', name: '学员名单' }, { id: 'messages', name: '消息' }],
+  coach: [{ id: 'home', name: '授课出勤' }, { id: 'schedule', name: '我的排班' }, { id: 'account', name: '学员名单' }, { id: 'income', name: '我的收入' }, { id: 'messages', name: '消息' }],
   admin: [{ id: 'home', name: '工作台' }, { id: 'schedule', name: '课程排班' }, { id: 'account', name: '学员管理' }, { id: 'finance', name: '收款账务' }],
 };
 const statuses: Record<string, string> = { confirmed: '待上课', cancelled: '已取消', attended: '已到课', absent: '爽约已结算' };
