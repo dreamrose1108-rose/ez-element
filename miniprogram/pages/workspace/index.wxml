@@ -22,7 +22,7 @@
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
       <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
       <view wx:if="{{!bookings.length}}" class="empty">暂无预约记录</view>
-      <view class="card" wx:for="{{bookings}}" wx:key="id">
+      <view class="card booking-card {{item.statusClass}}" wx:for="{{bookings}}" wx:key="id">
         <view class="row"><text class="title">{{item.title}}</text><text class="badge">{{item.statusName}}</text></view>
         <text class="schedule">{{item.schedule}}</text><text class="muted">{{role === 'student' ? '本次课时' : '学员 ' + item.memberName}} · {{item.cost}} 节</text>
         <text wx:if="{{item.cancelReason}}" class="muted">停课原因：{{item.cancelReason}}</text>

@@ -14,6 +14,9 @@
 .top-nav .on{background:#f5cf38;color:#252629;font-weight:800;}
 .quick-actions{display:flex;gap:16rpx;margin-bottom:20rpx;}
 .quick-actions button{flex:1;font-size:24rpx;margin:0;padding:24rpx 12rpx;}
+.booking-card{border-left:8rpx solid #f5cf38;transition:background-color .2s,border-color .2s;}
+.booking-card.status-attended{background:#e9f5ed;border-color:#78ad88;}
+.booking-card.status-attended .badge{background:#cfe8d6;color:#245b35;}
 .page button.wide{width:100%;box-sizing:border-box;margin-left:0;margin-right:0;}
 .receipt-detail{line-height:1.8;margin:20rpx 0;color:#424448;overflow-wrap:break-word;}
 .time-picker-row{display:flex;gap:20rpx;margin-top:12rpx;}
