@@ -53,7 +53,7 @@ export class GymService {
         const existing = await tx.get('users', actorId);
         // Never overwrite roles/status through a profile payload or phone matching.
         if (existing) return { id: existing.id };
-        await tx.put('users', { id: actorId, name: command.name, phone: command.phone, roles: ['student'], status: 'pending' });
+        await tx.put('users', { id: actorId, name: command.name, phone: command.phone, birthday: command.birthday, roles: ['student'], status: 'pending' });
         return { id: actorId };
       }
       const actor = await user(tx, actorId);
@@ -72,6 +72,12 @@ export class GymService {
     });
   }
   private async mutate(tx: Tx, actor: User, cmd: Exclude<Command, { action: 'register' | 'dashboard' }>, operation: string, now: number, rules: Rules, cancellationIds: string[] = []): Promise<{ id: string }> {
+    if (cmd.action === 'updateMember') {
+      role(actor, 'admin');
+      const target = await user(tx, cmd.userId); role(target, 'student');
+      target.name = cmd.name; target.phone = cmd.phone; target.birthday = cmd.birthday;
+      await tx.put('users', target); return { id: target.id };
+    }
     if (cmd.action === 'setCoach') {
       role(actor, 'admin');
       const target = await user(tx, cmd.userId);

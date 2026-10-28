@@ -35,7 +35,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
     } },
   });
   assert.ok(page); const p = page;
-  const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void };
+  const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void; chooseMemberBirthday(e: object): void; updateMember(e: object): Promise<void> };
   p.setData({ role: 'admin' }); await p.refresh();
   const navPage = p as PageHarness & { switchTab(e: object): void };
   assert.equal((p.data.navItems as { id: string }[]).map(n => n.id).join(','), 'home,schedule,account,finance');
@@ -46,6 +46,10 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   memberPage.openMember({ currentTarget: { dataset: { id: userKey('student') } } });
   assert.equal((p.data.memberDetail as { id: string }).id, userKey('student'));
   assert.equal((p.data.memberPacks as object[]).length, 1);
+  memberPage.chooseMemberBirthday({ detail: { value: '1996-06-18' } });
+  await memberPage.updateMember({ detail: { value: { name: '学员新名', phone: '13900000000' } } });
+  const updatedMember = await store.transaction(tx => tx.get('users', userKey('student')));
+  assert.equal(updatedMember?.name, '学员新名'); assert.equal(updatedMember?.phone, '13900000000'); assert.equal(updatedMember?.birthday, '1996-06-18');
   memberPage.filterMembers({ currentTarget: { dataset: { filter: 'coach' } } });
   assert.equal((p.data.filteredMembers as object[]).length, 0);
   memberPage.closeMember(); assert.equal(p.data.memberDetail, null);

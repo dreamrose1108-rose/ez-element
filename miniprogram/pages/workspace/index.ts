@@ -16,7 +16,7 @@ let dragRects: { top: number; bottom: number; left: number; right: number; datas
 Page({
   data: {
     demo: config.mode === 'demo', role: 'student' as Role, roleName: '学员端', roles: [] as { id: Role; name: string }[],
-    tab: 'home', busy: false, error: '', profile: null as Dashboard['profile'],
+    tab: 'home', busy: false, error: '', profile: null as Dashboard['profile'], today: dayKey(Date.now()), registrationBirthday: '',
     navItems: navigation.student, todayClasses: 0, unsettledCount: 0, coachRoster: [] as { id: string; name: string }[],
     days: Array.from({ length: 7 }, (_, i) => { const key = dayKey(Date.now() + i * 86400000); return { key, short: key.slice(5), label: i === 0 ? '今天' : ['日', '一', '二', '三', '四', '五', '六'][new Date(`${key}T12:00:00+08:00`).getUTCDay()] }; }),
     day: dayKey(Date.now()), kind: 'private', coachIndex: 0, coaches: [] as { id: string; name: string }[],
@@ -24,9 +24,9 @@ Page({
     weekScheduleDays: [] as { key: string; label: string; short: string; slots: { key: string; day: string; index: number; startLabel: string; endLabel: string; displayTime: string; durationLabel: string; state: string; stateName: string; sessionId: string; sessionStart: number; sessionEnd: number; start: number; end: number; disabled: boolean; selected: boolean; visible: boolean; span: number }[] }[],
     sessions: [] as object[], bookings: [] as object[], packs: [] as object[], messages: [] as object[], ledger: [] as object[], pending: [] as object[],
     users: [] as { id: string; name: string }[], memberIndex: 0, purchaseKindIndex: 0, kindNames: ['私教', '团课'],
-    staffMembers: [] as { id: string; name: string; shortId: string; isCoach: boolean }[],
-    memberQuery: '', memberFilter: 'all', filteredMembers: [] as { id: string; name: string; shortId: string; isCoach: boolean }[],
-    memberDetailId: '', memberDetail: null as null | { id: string; name: string; shortId: string; isCoach: boolean },
+    staffMembers: [] as { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean }[],
+    memberQuery: '', memberFilter: 'all', filteredMembers: [] as { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean }[],
+    memberDetailId: '', memberDetail: null as null | { id: string; name: string; phone: string; birthday: string; shortId: string; isCoach: boolean },
     memberPacks: [] as object[], memberBookings: [] as object[],
     totalAvailable: 0, totalFrozen: 0, totalConsumed: 0, myCount: 0,
     editing: null as null | { id: string; title: string; day: string; start: string; end: string; room: string; capacity: number; kind: string },
@@ -44,7 +44,7 @@ Page({
       const role = available.includes(this.data.role) ? this.data.role : available[0] || 'student';
       this.setData({ navItems: navigation[role], tab: navigation[role].some(item => item.id === this.data.tab) ? this.data.tab : 'home' });
       this.setData({ profile: snapshot.profile, role, roleName: roleNames[role], roles: available.map(id => ({ id, name: roleNames[id] })), coaches: snapshot.coaches || [], users: (snapshot.users || []).filter(u => u.status === 'active' && u.roles.includes('student')).map(u => ({ id: u.id, name: u.name })), pending: (snapshot.users || []).filter(u => u.status === 'pending') });
-      this.setData({ coachIndex: Math.min(this.data.coachIndex, Math.max(0, this.data.coaches.length - 1)), staffMembers: (snapshot.users || []).filter(u => u.status === 'active' && (u.roles.includes('student') || u.roles.includes('coach'))).map(u => ({ id: u.id, name: u.name, shortId: u.id.slice(-6), isCoach: u.roles.includes('coach') })) });
+      this.setData({ coachIndex: Math.min(this.data.coachIndex, Math.max(0, this.data.coaches.length - 1)), staffMembers: (snapshot.users || []).filter(u => u.status === 'active' && (u.roles.includes('student') || u.roles.includes('coach'))).map(u => ({ id: u.id, name: u.name, phone: u.phone, birthday: u.birthday || '', shortId: u.id.slice(-6), isCoach: u.roles.includes('coach') })) });
       this.renderData();
       this.renderMembers();
     } catch (e) { this.setData({ error: e instanceof Error ? e.message : '加载失败' }); }
@@ -117,6 +117,8 @@ Page({
   chooseMember(e: WechatMiniprogram.PickerChange) { this.setData({ memberIndex: Number(e.detail.value) }); },
   choosePurchaseKind(e: WechatMiniprogram.PickerChange) { this.setData({ purchaseKindIndex: Number(e.detail.value) }); },
   choosePackage(e: WechatMiniprogram.PickerChange) { this.setData({ packageIndex: Number(e.detail.value) }); },
+  chooseRegistrationBirthday(e: WechatMiniprogram.PickerChange) { this.setData({ registrationBirthday: String(e.detail.value), error: '' }); },
+  chooseMemberBirthday(e: WechatMiniprogram.PickerChange) { if (this.data.memberDetail) this.setData({ memberDetail: { ...this.data.memberDetail, birthday: String(e.detail.value) }, error: '' }); },
   startScheduleDrag(e: WechatMiniprogram.TouchEvent) {
     if (this.data.busy || this.data.role === 'student') return;
     const index = Number(e.currentTarget.dataset.index); const slot = this.data.scheduleSlots[index]; if (!slot) return;
@@ -222,7 +224,15 @@ Page({
     const r = await wx.showModal({ title: enabled ? '设为教练' : '取消教练身份', content: enabled ? `将 ${member.name}（${member.shortId}）设为教练，可维护自己的私教排班、查看授课预约并确认出勤。保留学员身份。` : `取消 ${member.name}（${member.shortId}）的教练权限，保留学员及其他已有身份。有未结束排课或未结算预约时无法取消。`, confirmText: enabled ? '确认设置' : '确认取消' });
     if (r.confirm && this.data.role === 'admin' && !this.data.busy) await this.mutate({ action: 'setCoach', userId: member.id, enabled }, enabled ? '已设为教练' : '已取消教练身份');
   },
-  register(e: WechatMiniprogram.FormSubmit) { this.mutate({ action: 'register', ...e.detail.value }, '已提交'); },
+  register(e: WechatMiniprogram.FormSubmit) {
+    if (!this.data.registrationBirthday) { this.setData({ error: '请选择生日' }); return; }
+    this.mutate({ action: 'register', ...e.detail.value, birthday: this.data.registrationBirthday }, '已提交');
+  },
+  async updateMember(e: WechatMiniprogram.FormSubmit) {
+    if (this.data.role !== 'admin' || !this.data.memberDetail || this.data.busy) return;
+    if (!this.data.memberDetail.birthday) { this.setData({ error: '请选择生日' }); return; }
+    await this.mutate({ action: 'updateMember', userId: this.data.memberDetail.id, ...e.detail.value, birthday: this.data.memberDetail.birthday }, '基础资料已保存');
+  },
   choosePublishStart(e: WechatMiniprogram.PickerChange) { this.setData({ publishStart: String(e.detail.value), error: '' }); },
   choosePublishEnd(e: WechatMiniprogram.PickerChange) { this.setData({ publishEnd: String(e.detail.value), error: '' }); },
   publish(e: WechatMiniprogram.FormSubmit) {

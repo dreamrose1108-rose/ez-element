@@ -9,7 +9,7 @@
   <view wx:if="{{busy}}" class="hint">正在处理，请稍候…</view>
   <view wx:if="{{!profile && !busy && !error}}" class="card">
     <view class="title">加入 {{'Ez element'}}</view><text class="muted">填写资料，由门店审核后开通预约。</text>
-    <form bindsubmit="register"><input name="name" placeholder="姓名" maxlength="40"/><input name="phone" placeholder="手机号（用于门店联系）" type="number" maxlength="11"/><button form-type="submit" class="primary" disabled="{{busy}}">提交入会申请</button></form>
+    <form bindsubmit="register"><input name="name" placeholder="姓名" maxlength="40"/><input name="phone" placeholder="手机号（用于门店联系）" type="number" maxlength="11"/><picker mode="date" start="1900-01-01" end="{{today}}" value="{{registrationBirthday}}" bindchange="chooseRegistrationBirthday"><view class="picker">生日：{{registrationBirthday || '请选择'}} ›</view></picker><button form-type="submit" class="primary" disabled="{{busy}}">提交入会申请</button></form>
   </view>
   <view wx:elif="{{profile && profile.status !== 'active'}}" class="empty">{{profile.status === 'pending' ? '资料已提交，等待门店审核。' : '账户已停用，请联系门店处理已有预约。'}}</view>
   <block wx:elif="{{profile && profile.status === 'active'}}">
@@ -138,6 +138,13 @@
   <view class="row"><text class="page-title">{{memberDetail.name}}</text><button class="secondary compact" bindtap="closeMember">关闭</button></view>
   <text class="muted">账号尾号 {{memberDetail.shortId}} · {{memberDetail.isCoach ? '教练 / 学员' : '学员'}}</text>
   <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view class="section">基础资料</view>
+  <form bindsubmit="updateMember">
+    <text class="muted">姓名</text><input name="name" value="{{memberDetail.name}}" maxlength="40" disabled="{{busy}}"/>
+    <text class="muted">手机号</text><input name="phone" value="{{memberDetail.phone}}" type="number" maxlength="11" disabled="{{busy}}"/>
+    <text class="muted">生日</text><picker mode="date" start="1900-01-01" end="{{today}}" value="{{memberDetail.birthday}}" bindchange="chooseMemberBirthday" disabled="{{busy}}"><view class="picker">{{memberDetail.birthday || '请选择生日'}} ›</view></picker>
+    <button class="primary" form-type="submit" disabled="{{busy}}">保存基础资料</button>
+  </form>
   <button class="secondary" data-id="{{memberDetail.id}}" bindtap="setCoach" disabled="{{busy}}">{{memberDetail.isCoach ? '取消教练身份' : '设为教练'}}</button>
   <view class="notice">以下为本次已加载的记录。历史数据较多时可能不完整，暂不作为全量对账依据。</view>
   <view class="section">课包</view>

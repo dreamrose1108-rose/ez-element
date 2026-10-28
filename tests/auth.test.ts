@@ -58,12 +58,12 @@ test('warm API invocations re-read trusted identity; client cannot register as a
   const first = wechatIdentity(settings.appid, 'a'); const second = wechatIdentity(settings.appid, 'b');
   let caller: TrustedCaller = { uid: 'platform-a', customUserId: first, isAnonymous: false };
   const api = apiHandler(() => caller, () => store);
-  assert.equal((await api({ action: 'register', name: 'A', phone: '13800000000', roles: ['admin'] })).ok, false);
-  assert.equal((await api({ action: 'register', name: 'A', phone: '13800000000' })).ok, true);
+  assert.equal((await api({ action: 'register', name: 'A', phone: '13800000000', birthday: '1990-01-01', roles: ['admin'] })).ok, false);
+  assert.equal((await api({ action: 'register', name: 'A', phone: '13800000000', birthday: '1990-01-01' })).ok, true);
   caller = { uid: 'platform-b', customUserId: second, isAnonymous: false };
   const fresh = await api({ action: 'dashboard' });
   assert.ok('data' in fresh && fresh.data && 'profile' in fresh.data && fresh.data.profile === null);
-  assert.equal((await api({ action: 'register', name: 'B', phone: '13800000000' })).ok, true);
+  assert.equal((await api({ action: 'register', name: 'B', phone: '13800000000', birthday: '1992-02-02' })).ok, true);
   assert.deepEqual((await store.transaction(tx => tx.get('users', userKey(first))))?.roles, ['student']);
   assert.equal((await store.transaction(tx => tx.get('users', userKey(second))))?.name, 'B');
 });
@@ -76,7 +76,7 @@ test('CloudBase transport metadata is ignored without relaxing business validati
   const tcbContext = { uid: 'victim', customUserId: 'admin', roles: ['admin'] };
   const dashboard = await api({ action: 'dashboard', userInfo, tcbContext });
   assert.ok(dashboard.ok && 'data' in dashboard && dashboard.data && 'profile' in dashboard.data && dashboard.data.profile === null);
-  assert.equal((await api({ action: 'register', name: 'Metadata test', phone: '13800000000', userInfo, tcbContext })).ok, true);
+  assert.equal((await api({ action: 'register', name: 'Metadata test', phone: '13800000000', birthday: '1990-01-01', userInfo, tcbContext })).ok, true);
   assert.deepEqual((await store.transaction(tx => tx.get('users', userKey(identity))))?.roles, ['student']);
   for (const extra of [{ role: 'admin' }, { uid: 'victim' }, { unexpected: true }]) {
     const response = await api({ action: 'dashboard', userInfo, tcbContext, ...extra });

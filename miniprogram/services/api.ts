@@ -2,7 +2,7 @@ import { config } from '../config';
 import { callCloud } from './cloudbase';
 
 export type Role = 'student' | 'coach' | 'admin';
-export interface Profile { id: string; name: string; roles: Role[]; status: string }
+export interface Profile { id: string; name: string; phone: string; birthday?: string; roles: Role[]; status: string }
 export interface Session { id: string; kind: string; title: string; coachId: string; roomId: string; start: number; end: number; reserved: number; capacity: number; cost: number; status: string; cancelHours: number; cutoffMinutes: number; cancelReason?: string }
 export interface Pack { id: string; memberId: string; kind: string; available: number; frozen: number; consumed: number; expiresAt: number; coachIds: string[] }
 export interface Booking { id: string; sessionId: string; memberId: string; status: string; cost: number; packageId: string; cancelReason?: string }

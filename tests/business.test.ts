@@ -45,7 +45,7 @@ test('消课金额通知原子保存、重复结算不重发，分摊尾差最�
 test('教练身份仅管理员可管理，保留原角色，幂等并记录审计', async () => {
   const f = await fixture();
   for (const who of ['student', 'coach']) await rejectsCode(f.call(who, 'setCoach', { userId: userKey('student'), enabled: true }), 'FORBIDDEN');
-  await f.service.execute('pending', { action: 'register', name: '待审核', phone: '13800000000' });
+  await f.service.execute('pending', { action: 'register', name: '待审核', phone: '13800000000', birthday: '1990-01-01' });
   await rejectsCode(f.call('admin', 'setCoach', { userId: userKey('pending'), enabled: true }), 'INACTIVE');
   await f.store.transaction(async tx => { const u = (await tx.get('users', userKey('student')))!; u.roles.push('admin'); await tx.put('users', u); });
   const cmd = { userId: userKey('student'), enabled: true, requestId: 'grant-coach-unique' };
@@ -76,12 +76,22 @@ test('并发发布排课与取消教练身份不能同时成功', async () => {
 
 test('注册无法自行提权；同手机号不接管原有身份；待审核不能预约', async () => {
   const f = await fixture();
-  await assert.rejects(f.service.execute('new', { action: 'register', name: '新人', phone: '13800000000', roles: ['admin'] }));
-  await f.service.execute('new', { action: 'register', name: '新人', phone: '13800000000' });
-  assert.equal((await f.store.transaction(tx => tx.get('users', userKey('new'))))?.status, 'pending');
+  await assert.rejects(f.service.execute('new', { action: 'register', name: '新人', phone: '13800000000', birthday: '1995-05-20', roles: ['admin'] }));
+  await assert.rejects(f.service.execute('new', { action: 'register', name: '新人', phone: '13800000000', birthday: '2099-01-01' }));
+  await f.service.execute('new', { action: 'register', name: '新人', phone: '13800000000', birthday: '1995-05-20' });
+  const registered = await f.store.transaction(tx => tx.get('users', userKey('new')));
+  assert.equal(registered?.status, 'pending'); assert.equal(registered?.birthday, '1995-05-20');
   await rejectsCode(f.call('new', 'book', { sessionId: 'x', packageId: 'y' }), 'INACTIVE');
   await f.call('admin', 'approve', { userId: userKey('new') });
   assert.equal((await f.store.transaction(tx => tx.get('users', userKey('new'))))?.status, 'active');
+});
+
+test('管理员可维护学员姓名、手机号和生日，其他角色不能修改', async () => {
+  const f = await fixture();
+  await rejectsCode(f.call('student', 'updateMember', { userId: userKey('student'), name: '新姓名', phone: '13900000000', birthday: '1996-06-18' }), 'FORBIDDEN');
+  await f.call('admin', 'updateMember', { userId: userKey('student'), name: '新姓名', phone: '13900000000', birthday: '1996-06-18' });
+  const member = await f.store.transaction(tx => tx.get('users', userKey('student')));
+  assert.equal(member?.name, '新姓名'); assert.equal(member?.phone, '13900000000'); assert.equal(member?.birthday, '1996-06-18');
 });
 
 test('购课 → 预约 → 取消 → 重新预约 → 出勤；幂等且账目可重建', async () => {
