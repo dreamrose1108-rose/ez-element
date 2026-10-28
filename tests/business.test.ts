@@ -21,6 +21,59 @@ async function fixture() {
 }
 const rejectsCode = async (promise: Promise<unknown>, code: string) => assert.rejects(promise, (e: unknown) => e instanceof BusinessError && e.code === code);
 
+test('消课金额通知原子保存、重复结算不重发，分摊尾差最终归零', async () => {
+  const f = await fixture(); const p = await f.purchase('student', { credits: 3, amountFen: 100 });
+  const bookings: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const s = await f.publish({ start: f.now() + (i + 2) * 86400000, end: f.now() + (i + 2) * 86400000 + 3600000 });
+    bookings.push((await f.call('student', 'book', { sessionId: s.id, packageId: p.id })).id);
+  }
+  f.advance(6 * 86400000);
+  for (const bookingId of bookings) {
+    await f.call('coach', 'settle', { bookingId, outcome: 'attended' });
+    await f.call('coach', 'settle', { bookingId, outcome: 'attended' });
+  }
+  const notices = (await f.get('inbox')).filter(m => m.userId === userKey('student') && m.receipt);
+  assert.equal(notices.length, 3);
+  const receipts = bookings.map(id => notices.find(m => m.bookingId === id)!.receipt!);
+  assert.deepEqual(receipts.map(r => r.deductedFen), [33, 34, 33]);
+  assert.deepEqual(receipts.map(r => r.remainingFen), [67, 33, 0]);
+  assert.deepEqual(receipts.map(r => r.frozenCredits), [2, 1, 0]);
+  assert.equal((await f.get('inbox')).filter(m => m.userId === userKey('coach') && m.receipt).length, 0);
+});
+
+test('教练身份仅管理员可管理，保留原角色，幂等并记录审计', async () => {
+  const f = await fixture();
+  for (const who of ['student', 'coach']) await rejectsCode(f.call(who, 'setCoach', { userId: userKey('student'), enabled: true }), 'FORBIDDEN');
+  await f.service.execute('pending', { action: 'register', name: '待审核', phone: '13800000000' });
+  await rejectsCode(f.call('admin', 'setCoach', { userId: userKey('pending'), enabled: true }), 'INACTIVE');
+  await f.store.transaction(async tx => { const u = (await tx.get('users', userKey('student')))!; u.roles.push('admin'); await tx.put('users', u); });
+  const cmd = { userId: userKey('student'), enabled: true, requestId: 'grant-coach-unique' };
+  await f.call('admin', 'setCoach', cmd); await f.call('admin', 'setCoach', cmd);
+  assert.deepEqual((await f.store.transaction(tx => tx.get('users', userKey('student'))))?.roles, ['student', 'admin', 'coach']);
+  assert.equal((await f.get('auditLogs')).filter(a => a.action === 'setCoach').length, 1);
+  await f.call('admin', 'setCoach', { userId: userKey('student'), enabled: false });
+  assert.deepEqual((await f.store.transaction(tx => tx.get('users', userKey('student'))))?.roles, ['student', 'admin']);
+});
+
+test('取消教练阻止未来空闲排课和历史未结算预约，处理完后才允许取消', async () => {
+  const f = await fixture(); const s = await f.publish();
+  await rejectsCode(f.call('admin', 'setCoach', { userId: userKey('coach'), enabled: false }), 'COACH_HAS_WORK');
+  const p = await f.purchase(); const b = await f.call('student', 'book', { sessionId: s.id, packageId: p.id });
+  f.advance(3 * 86400000);
+  await rejectsCode(f.call('admin', 'setCoach', { userId: userKey('coach'), enabled: false }), 'COACH_HAS_WORK');
+  await f.call('coach', 'settle', { bookingId: b.id, outcome: 'attended' });
+  await f.call('admin', 'setCoach', { userId: userKey('coach'), enabled: false });
+  assert.deepEqual((await f.store.transaction(tx => tx.get('users', userKey('coach'))))?.roles, ['student']);
+  await rejectsCode(f.publish({}, 'coach'), 'FORBIDDEN');
+});
+
+test('并发发布排课与取消教练身份不能同时成功', async () => {
+  const f = await fixture();
+  const results = await Promise.allSettled([f.publish(), f.call('admin', 'setCoach', { userId: userKey('coach'), enabled: false })]);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+});
+
 test('注册无法自行提权；同手机号不接管原有身份；待审核不能预约', async () => {
   const f = await fixture();
   await assert.rejects(f.service.execute('new', { action: 'register', name: '新人', phone: '13800000000', roles: ['admin'] }));

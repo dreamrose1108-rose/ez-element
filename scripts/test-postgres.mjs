@@ -18,7 +18,7 @@ const database = 'ez_test_business';
 const logs = [];
 const instance = new EmbeddedPostgres({ databaseDir: join(root, 'db'), port, user: 'postgres', password,
   persistent: false, authMethod: 'scram-sha-256',
-  postgresFlags: ['-c', 'listen_addresses=127.0.0.1', '-c', `unix_socket_directories=${root}`],
+  postgresFlags: ['-c', 'listen_addresses=127.0.0.1', '-c', `unix_socket_directories=${process.platform === 'win32' ? '' : root}`],
   onLog: message => logs.push(String(message)), onError: message => logs.push(String(message)),
 });
 let admin;

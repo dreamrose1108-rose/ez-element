@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 
 async function bundle(fakeSdk: boolean) {
   return (await build({ entryPoints: ['miniprogram/services/api.ts'], bundle: true, write: false, platform: 'neutral', mainFields: ['main', 'module'], format: 'cjs', plugins: [{ name: 'test-config', setup(builder) {
-    builder.onLoad({ filter: /miniprogram\/config\.ts$/ }, () => ({ contents: `export const config = { mode: 'cloud', envId: 'test-env', loginUrl: 'https://test-env.service.tcloudbase.com/getLoginTicket', demoUrl: '' };`, loader: 'ts' }));
+    builder.onLoad({ filter: /miniprogram[\\/]config\.ts$/ }, () => ({ contents: `export const config = { mode: 'cloud', envId: 'test-env', loginUrl: 'https://test-env.service.tcloudbase.com/getLoginTicket', demoUrl: '' };`, loader: 'ts' }));
     if (fakeSdk) {
       builder.onResolve({ filter: /^@cloudbase\/(js-sdk\/miniprogram_dist\/index.js|adapter-wx_mp)$/ }, args => ({ path: args.path, namespace: 'test-sdk' }));
       builder.onLoad({ filter: /.*/, namespace: 'test-sdk' }, args => ({ contents: args.path.includes('js-sdk') ? 'module.exports = testSdk;' : 'module.exports = {};', loader: 'js' }));
@@ -60,4 +60,26 @@ test('packaged real SDK and wx adapter initialize without browser globals before
   } });
   await assert.rejects(exported.exports.api('student', { action: 'dashboard' }), /微信登录失败/);
   assert.equal(loginCalled, true);
+});
+
+test('resolved SDK login errors stop business calls and allow a successful retry', async () => {
+  const { exported, context } = sandbox();
+  let signedIn = false; let signs = 0; let calls = 0;
+  const testSdk = { useAdapters() {}, init() { return {
+    auth: () => ({ getLoginState: async () => signedIn ? {} : null, signOut: async () => { signedIn = false; },
+      signInWithCustomTicket: async () => {
+        if (++signs === 1) return { data: {}, error: { errMsg: 'request:fail url not in domain list' } };
+        signedIn = true; return { data: { session: {} }, error: null };
+      },
+    }),
+    callFunction: async () => { calls++; return { result: { ok: true, data: { profile: null } } }; },
+  }; } };
+  vm.runInNewContext(await bundle(true), { ...context, testSdk, wx: {
+    login: ({ success }: { success(value: object): void }) => success({ code: 'code' }),
+    request: ({ success }: { success(value: object): void }) => success({ statusCode: 200, data: { ok: true, ticket: 'ticket' } }),
+  } });
+  await assert.rejects(exported.exports.api('student', { action: 'dashboard' }), /云端登录未完成（REQUEST_DOMAIN）/);
+  assert.equal(calls, 0);
+  assert.equal(JSON.stringify(await exported.exports.api('student', { action: 'dashboard' })), '{"profile":null}');
+  assert.equal(calls, 1); assert.equal(signs, 2);
 });

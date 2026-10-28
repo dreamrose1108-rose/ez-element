@@ -1,19 +1,24 @@
 <view class="page">
   <view wx:if="{{demo}}" class="demo">本地开发演示 · 非真实账户与收款</view>
-  <view class="brand"><view><text class="brand-cn">{{'FORM & FLOW'}}</text><text class="brand-en">MOVE WITH PURPOSE</text></view><text class="badge">{{roleName}}</text></view>
+  <view class="workspace-header">
+  <view class="brand"><view><text class="brand-cn">{{'Ez element'}}</text><text class="brand-en">MOVE WITH PURPOSE</text></view><text class="badge">{{roleName}}</text></view>
   <view class="roles" wx:if="{{roles.length > 1}}"><button wx:for="{{roles}}" wx:key="id" data-role="{{item.id}}" bindtap="switchRole" class="{{role === item.id ? 'active' : ''}}">{{item.name}}</button></view>
+  <view wx:if="{{profile && profile.status === 'active'}}" class="top-nav"><button wx:for="{{navItems}}" wx:key="id" class="{{tab === item.id ? 'on' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" disabled="{{busy}}">{{item.name}}</button></view>
+  </view>
   <view class="error" wx:if="{{error}}">{{error}}<button bindtap="refresh" size="mini">重试加载</button></view>
   <view wx:if="{{busy}}" class="hint">正在处理，请稍候…</view>
   <view wx:if="{{!profile && !busy && !error}}" class="card">
-    <view class="title">加入 {{'FORM & FLOW'}}</view><text class="muted">填写资料，由门店审核后开通预约。</text>
+    <view class="title">加入 {{'Ez element'}}</view><text class="muted">填写资料，由门店审核后开通预约。</text>
     <form bindsubmit="register"><input name="name" placeholder="姓名" maxlength="40"/><input name="phone" placeholder="手机号（用于门店联系）" type="number" maxlength="11"/><button form-type="submit" class="primary" disabled="{{busy}}">提交入会申请</button></form>
   </view>
   <view wx:elif="{{profile && profile.status !== 'active'}}" class="empty">{{profile.status === 'pending' ? '资料已提交，等待门店审核。' : '账户已停用，请联系门店处理已有预约。'}}</view>
   <block wx:elif="{{profile && profile.status === 'active'}}">
     <block wx:if="{{tab === 'home'}}">
-      <view class="greeting">你好，{{profile.name}}<text class="muted">把时间留给更好的自己</text></view>
-      <view class="hero"><text class="eyebrow">{{'FORM & FLOW'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
-      <view class="metrics"><view><text class="number">{{totalAvailable}}</text><text>可用课时</text></view><view><text class="number">{{totalFrozen}}</text><text>已冻结</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
+      <view class="greeting">{{role === "admin" ? "门店工作台" : role === "coach" ? "授课工作台" : "你好，" + profile.name}}<text class="muted">{{role === "admin" ? "审核、排课、收款，各有入口" : role === "coach" ? "查看授课预约，及时确认出勤" : "查看预约，安排下一次训练"}}</text></view>
+      <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
+      <view wx:if="{{role === 'student'}}" class="metrics"><view><text class="number">{{totalAvailable}}</text><text>可用课时</text></view><view><text class="number">{{totalFrozen}}</text><text>已冻结</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
+      <view wx:if="{{role !== 'student'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{role === 'admin' ? pending.length : myCount}}</text><text>{{role === 'admin' ? '待审核学员' : '待上课预约'}}</text></view></view>
+      <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
       <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
       <view wx:if="{{!bookings.length}}" class="empty">暂无预约记录</view>
@@ -56,14 +61,31 @@
       </view>
     </block>
     <block wx:if="{{tab === 'account'}}">
-      <view class="page-title">每一节，都有记录</view><text class="muted">预约冻结，到课后消耗，取消退回原课包。</text>
+      <block wx:if="{{role === 'admin'}}">
+        <view class="section">待审核学员</view><view wx:for="{{pending}}" wx:key="id" class="card row"><text>{{item.name}}</text><button class="primary compact" data-id="{{item.id}}" bindtap="approve" disabled="{{busy}}">审核通过</button></view><text wx:if="{{!pending.length}}" class="muted">暂无待审核申请</text>
+        <view class="page-title">学员与教练</view><text class="muted">先审核入会申请，再设置教练身份；学员身份会保留。</text>
+        <input placeholder="搜索姓名或账号尾号" value="{{memberQuery}}" bindinput="searchMembers" maxlength="40"/>
+        <view class="segments"><button class="{{memberFilter === 'all' ? 'selected' : ''}}" data-filter="all" bindtap="filterMembers">全部</button><button class="{{memberFilter === 'coach' ? 'selected' : ''}}" data-filter="coach" bindtap="filterMembers">仅教练</button></view>
+        <text class="muted">当前已加载名单中找到 {{filteredMembers.length}} 人</text>
+        <view wx:for="{{filteredMembers}}" wx:key="id" class="card">
+          <view class="row"><text class="title">{{item.name}}</text><text class="badge">{{item.isCoach ? '教练' : '学员'}}</text></view>
+          <text class="muted">账号尾号 {{item.shortId}}</text>
+          <button class="secondary" data-id="{{item.id}}" bindtap="openMember" disabled="{{busy}}">查看学员详情</button>
+          <button class="{{item.isCoach ? 'secondary' : 'primary'}}" data-id="{{item.id}}" bindtap="setCoach" disabled="{{busy}}">{{item.isCoach ? '取消教练身份' : '设为教练'}}</button>
+        </view>
+        <view wx:if="{{!filteredMembers.length}}" class="empty">{{staffMembers.length ? '没有匹配的学员，请调整搜索条件' : '暂无已审核学员'}}</view>
+      </block>
+      <block wx:if="{{role === 'student'}}">
+      <view class="page-title">我的课包</view><text class="muted">预约冻结，到课后消耗，取消退回原课包。</text>
       <view class="pack" wx:for="{{packs}}" wx:key="id"><view class="row"><text class="title">{{item.title}}</text><text class="badge">{{item.expired ? '已到期' : '次卡'}}</text></view><view class="metrics"><view><text class="number">{{item.available}}</text><text>{{item.expired ? '到期余额' : '可用'}}</text></view><view><text class="number">{{item.frozen}}</text><text>冻结</text></view><view><text class="number">{{item.consumed}}</text><text>已消耗</text></view></view><text class="muted">有效期至 {{item.expiry}}</text></view>
       <view wx:if="{{!packs.length}}" class="empty">暂无课包，请联系门店线下购课。</view>
-      <block wx:if="{{role === 'admin'}}"><view class="section">线下收款登记</view><view class="card"><text class="muted">确认已收到款项后登记；当前表单记录转账收款。</text><picker range="{{users}}" range-key="name" value="{{memberIndex}}" bindchange="chooseMember"><view class="picker">学员：{{users[memberIndex].name || '暂无已审核学员'}} ›</view></picker><picker range="{{kindNames}}" value="{{purchaseKindIndex}}" bindchange="choosePurchaseKind"><view class="picker">课包类型：{{kindNames[purchaseKindIndex]}} ›</view></picker><picker wx:if="{{purchaseKindIndex === 0}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">绑定教练：{{coaches[coachIndex].name || '暂无教练'}} ›</view></picker><form bindsubmit="purchase"><input name="credits" type="number" placeholder="课时数量"/><input name="amount" type="digit" placeholder="实际收款（元）"/><input name="expiry" placeholder="有效期，如 2027-04-27"/><input name="note" placeholder="收款凭据 / 备注（必填）"/><button class="primary" form-type="submit" disabled="{{busy || !users.length}}">确认已收款并开卡</button></form></view><view class="section">待审核学员</view><view wx:for="{{pending}}" wx:key="id" class="card row"><text>{{item.name}}</text><button class="primary compact" data-id="{{item.id}}" bindtap="approve" disabled="{{busy}}">审核通过</button></view><text wx:if="{{!pending.length}}" class="muted">暂无待审核申请</text></block>
+
       <view class="section">课时流水</view><view class="ledger" wx:for="{{ledger}}" wx:key="id"><view><text>{{item.title}}</text><text class="muted">{{item.date}}</text></view><view class="muted">可用 {{item.delta.available}} / 冻结 {{item.delta.frozen}} / 消耗 {{item.delta.consumed}}</view></view>
+      </block>
+      <block wx:if="{{role === 'coach'}}"><view class="page-title">授课学员</view><text class="muted">按当前已加载的授课预约整理</text><view wx:for="{{coachRoster}}" wx:key="id" class="card"><text class="title">{{item.name}}</text><text class="muted">查看授课出勤页可处理对应预约</text></view><view wx:if="{{!coachRoster.length}}" class="empty">暂无授课学员</view></block>
     </block>
-    <block wx:if="{{tab === 'messages'}}"><view class="page-title">消息通知</view><text class="muted">站内记录；微信订阅提醒将在账号开通后接入。</text><view wx:for="{{messages}}" wx:key="id" class="card"><view class="title">{{item.title}}</view><text class="muted">{{item.date}}</text></view><view wx:if="{{!messages.length}}" class="empty">暂无消息</view></block>
-    <view class="bottom-nav"><button class="{{tab === 'home' ? 'on' : ''}}" data-tab="home" bindtap="switchTab">首页</button><button class="{{tab === 'schedule' ? 'on' : ''}}" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '约课' : '排课'}}</button><button class="{{tab === 'account' ? 'on' : ''}}" data-tab="account" bindtap="switchTab">{{role === 'admin' ? '管理' : '课包'}}</button><button class="{{tab === 'messages' ? 'on' : ''}}" data-tab="messages" bindtap="switchTab">消息</button></view>
+    <block wx:if="{{role === 'admin' && tab === 'finance'}}"><view class="page-title">收款与课时账务</view><text class="muted">线下确认到账，再登记开卡</text><view class="section">线下收款登记</view><view class="card"><text class="muted">确认已收到款项后登记；当前表单记录转账收款。</text><picker range="{{users}}" range-key="name" value="{{memberIndex}}" bindchange="chooseMember"><view class="picker">学员：{{users[memberIndex].name || '暂无已审核学员'}} ›</view></picker><picker range="{{kindNames}}" value="{{purchaseKindIndex}}" bindchange="choosePurchaseKind"><view class="picker">课包类型：{{kindNames[purchaseKindIndex]}} ›</view></picker><picker wx:if="{{purchaseKindIndex === 0}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">绑定教练：{{coaches[coachIndex].name || '暂无教练'}} ›</view></picker><form bindsubmit="purchase"><input name="credits" type="number" placeholder="课时数量"/><input name="amount" type="digit" placeholder="实际收款（元）"/><input name="expiry" placeholder="有效期，如 2027-04-27"/><input name="note" placeholder="收款凭据 / 备注（必填）"/><button class="primary" form-type="submit" disabled="{{busy || !users.length}}">确认已收款并开卡</button></form></view>      <view class="section">课时流水</view><view class="ledger" wx:for="{{ledger}}" wx:key="id"><view><text>{{item.title}}</text><text class="muted">{{item.date}}</text></view><view class="muted">可用 {{item.delta.available}} / 冻结 {{item.delta.frozen}} / 消耗 {{item.delta.consumed}}</view></view></block>
+    <block wx:if="{{tab === 'messages' || (role === 'admin' && tab === 'home')}}"><view class="page-title">消息通知</view><text class="muted">扣课通知保存在这里；微信服务通知尚未接入。</text><view wx:for="{{messages}}" wx:key="id" class="card"><view class="title">{{item.title}}</view><view wx:if="{{item.detail}}" class="receipt-detail">{{item.detail}}</view><text class="muted">{{item.date}}</text></view><view wx:if="{{!messages.length}}" class="empty">暂无消息</view></block>
   </block>
 </view>
 <view wx:if="{{selectedId}}" class="overlay"><view class="sheet"><view class="row"><text class="page-title">确认预约</text><button class="compact secondary" bindtap="dismiss">关闭</button></view><view class="title">{{selectedTitle}}</view><text class="schedule">{{selectedTime}}</text><picker wx:if="{{eligible.length}}" range="{{eligible}}" range-key="label" value="{{packageIndex}}" bindchange="choosePackage"><view class="picker">{{eligible[packageIndex].label}} ›</view></picker><text class="muted" wx:else>没有适用课包，请联系门店购课或延期。</text><view class="notice">本次冻结 {{selectedCost}} 节，开课前 {{selectedCancel}} 小时可自助取消。</view><button class="primary" bindtap="confirmBook" disabled="{{!eligible.length || busy}}">确认预约 · 冻结 {{selectedCost}} 节</button></view></view>
@@ -80,4 +102,18 @@
     <block wx:if="{{editing.kind === 'group'}}"><text class="muted">人数上限</text><input name="capacity" type="number" value="{{editing.capacity}}" disabled="{{busy}}"/></block>
     <button class="primary save-slot" form-type="submit" disabled="{{busy}}">保存修改</button>
   </form>
+</scroll-view></view>
+
+<view wx:if="{{role === 'admin' && memberDetail}}" class="overlay"><scroll-view scroll-y class="sheet member-sheet">
+  <view class="row"><text class="page-title">{{memberDetail.name}}</text><button class="secondary compact" bindtap="closeMember">关闭</button></view>
+  <text class="muted">账号尾号 {{memberDetail.shortId}} · {{memberDetail.isCoach ? '教练 / 学员' : '学员'}}</text>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <button class="secondary" data-id="{{memberDetail.id}}" bindtap="setCoach" disabled="{{busy}}">{{memberDetail.isCoach ? '取消教练身份' : '设为教练'}}</button>
+  <view class="notice">以下为本次已加载的记录。历史数据较多时可能不完整，暂不作为全量对账依据。</view>
+  <view class="section">课包</view>
+  <view wx:for="{{memberPacks}}" wx:key="id" class="pack"><view class="title">{{item.title}}</view><text>可用 {{item.available}} · 冻结 {{item.frozen}} · 已消耗 {{item.consumed}}</text><text class="muted">{{item.expired ? '已到期' : '有效期至'}} {{item.expiry}}</text></view>
+  <view wx:if="{{!memberPacks.length}}" class="empty">已加载记录中暂无课包</view>
+  <view class="section">预约记录</view>
+  <view wx:for="{{memberBookings}}" wx:key="id" class="card"><view class="row"><text class="title">{{item.title}}</text><text class="badge">{{item.status}}</text></view><text class="muted">{{item.schedule}}</text></view>
+  <view wx:if="{{!memberBookings.length}}" class="empty">已加载记录中暂无预约</view>
 </scroll-view></view>

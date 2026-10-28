@@ -9,6 +9,10 @@ export class MemoryStore implements Store {
     const run = this.queue.then(async () => {
       const draft = structuredClone(this.docs);
       const tx: Tx = {
+        hasCoachWork: async (coachId, now) => {
+          const sessions = [...draft.entries()].filter(([k]) => k.startsWith('sessions/')).map(([, v]) => v as Tables['sessions']).filter(s => s.coachId === coachId);
+          return sessions.some(s => s.status === 'open' && s.end > now) || [...draft.entries()].some(([k, v]) => k.startsWith('bookings/') && (v as Tables['bookings']).status === 'confirmed' && sessions.some(s => s.id === (v as Tables['bookings']).sessionId));
+        },
         get: async <K extends Table>(table: K, id: string) => structuredClone(draft.get(`${table}/${id}`)) as Tables[K] | undefined,
         put: async <K extends Table>(table: K, value: Tables[K]) => { draft.set(`${table}/${value.id}`, structuredClone(value)); },
       };

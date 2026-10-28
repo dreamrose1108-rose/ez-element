@@ -1,3 +1,4 @@
+import { cloudFailureCode } from './cloud-error';
 import { config } from '../config';
 import { LoginSession } from './login-session';
 
@@ -17,7 +18,17 @@ function getClient(): { client: CloudApp; login: LoginSession } {
     login = new LoginSession({
       hasSession: async () => Boolean(await auth.getLoginState()),
       getTicket,
-      signIn: ticket => auth.signInWithCustomTicket(() => Promise.resolve(ticket)),
+      signIn: async ticket => {
+        // This SDK resolves with { data, error } even when authentication fails.
+        // Do not call business functions with an absent/invalid credential.
+        // The package's legacy declaration still says ILoginState.
+        const result: unknown = await auth.signInWithCustomTicket(() => Promise.resolve(ticket));
+        if (result && typeof result === 'object' && 'error' in result && result.error) {
+          throw new Error(`云端登录未完成（${cloudFailureCode(result.error)}），请稍后重试`);
+        }
+        if (!await auth.getLoginState()) throw new Error('云端登录未完成（NO_SESSION），请重新登录');
+        return result;
+      },
       signOut: () => auth.signOut(),
     });
   }
@@ -57,18 +68,6 @@ function authError(error: unknown): boolean {
   return ['UNAUTHORIZED', 'UNAUTHENTICATED', 'ACCESS_TOKEN_EXPIRED', 'INVALID_ACCESS_TOKEN', 'CHECK_LOGIN_FAILED'].includes(String(code));
 }
 
-function cloudFailureCode(error: unknown): string {
-  const value = error && typeof error === 'object' ? error as Record<string, unknown> : {};
-  const detail = [value.message, value.errMsg, value.error_description].map(String).join(' ').toLowerCase();
-  if (detail.includes('domain list')) return 'REQUEST_DOMAIN';
-  if (detail.includes('timeout') || detail.includes('timed out')) return 'TIMEOUT';
-  if (detail.includes('network') || detail.includes('request:fail')) return 'NETWORK';
-  if (detail.includes('not found') || detail.includes('not exist')) return 'FUNCTION_NOT_FOUND';
-  if (detail.includes('permission') || detail.includes('forbidden')) return 'PERMISSION_DENIED';
-  const raw = [value.code, value.errorCode, value.errCode].find(item => typeof item === 'string' || typeof item === 'number');
-  const code = String(raw || '').toUpperCase();
-  return /^[A-Z0-9_.:-]{1,64}$/.test(code) ? code : 'UNKNOWN';
-}
 export async function callCloud(command: Record<string, unknown>): Promise<unknown> {
   const { client, login } = getClient();
   await login.ensure();

@@ -1,3 +1,18 @@
 /* Shared yellow/gray theme lives in app.wxss. */
 
 .edit-sheet{max-height:88vh;}
+.member-sheet{max-height:85vh;box-sizing:border-box;}
+.page{padding-bottom:calc(40rpx + env(safe-area-inset-bottom));}
+.workspace-header{position:sticky;top:0;z-index:10;background:#f4f4f3;margin:-28rpx -32rpx 24rpx;padding:22rpx 24rpx 0;border-bottom:1rpx solid #dededb;}
+.workspace-header .brand{margin-bottom:16rpx;}
+.workspace-header .brand-cn{font-size:34rpx;letter-spacing:1rpx;}
+.workspace-header .brand-en{font-size:14rpx;}
+.workspace-header .roles{margin-bottom:12rpx;}
+.workspace-header .roles button{padding:12rpx 8rpx;}
+.top-nav{display:flex;gap:4rpx;padding-bottom:12rpx;}
+.top-nav button{flex:1;min-width:0;padding:22rpx 2rpx;font-size:24rpx;background:transparent;color:#66686a;border-radius:12rpx;white-space:nowrap;}
+.top-nav .on{background:#f5cf38;color:#252629;font-weight:800;}
+.quick-actions{display:flex;gap:16rpx;margin-bottom:20rpx;}
+.quick-actions button{flex:1;font-size:24rpx;margin:0;padding:24rpx 12rpx;}
+.page button.wide{width:100%;box-sizing:border-box;margin-left:0;margin-right:0;}
+.receipt-detail{line-height:1.8;margin:20rpx 0;color:#424448;overflow-wrap:break-word;}

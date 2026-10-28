@@ -11,7 +11,7 @@ export interface Booking { id: string; sessionId: string; memberId: string; pack
 export interface Schedule { id: string; entries: { ref: string; start: number; end: number }[] }
 export interface Ledger { id: string; packageId: string; memberId: string; actorId: string; type: 'purchase' | 'freeze' | 'release' | 'consume'; reference: string; delta: { available: number; frozen: number; consumed: number }; at: number }
 export interface Purchase { id: string; memberId: string; packageId: string; amountFen: number; method: 'cash' | 'transfer'; note: string; actorId: string; at: number }
-export interface Inbox { id: string; userId: string; title: string; bookingId: string; at: number }
+export interface Inbox { id: string; userId: string; title: string; bookingId: string; at: number; detail?: string; receipt?: { packageId: string; deductedFen: number; remainingFen: number; consumedCredits: number; remainingCredits: number; frozenCredits: number } }
 export interface RequestRecord { id: string; fingerprint: string; result: { id: string } }
 export interface Audit { id: string; actorId: string; action: string; targetId: string; at: number }
 export interface Rules { id: string; bookingDays: number; privateCancelHours: number; groupCancelHours: number; cutoffMinutes: number }
@@ -24,6 +24,7 @@ const time = z.number().int().positive().max(4102444800000);
 export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('register'), name: z.string().trim().min(1).max(40), phone: z.string().regex(/^1\d{10}$/) }).strict(),
   z.object({ action: z.literal('approve'), requestId, userId: id }).strict(),
+  z.object({ action: z.literal('setCoach'), requestId, userId: id, enabled: z.boolean() }).strict(),
   z.object({ action: z.literal('purchase'), requestId, memberId: id, kind: kindSchema, coachIds: z.array(id).max(20), credits: count, expiresAt: time, amountFen: z.number().int().min(0).max(100000000), method: z.enum(['cash', 'transfer']), note: z.string().trim().min(1).max(200) }).strict(),
   z.object({ action: z.literal('publish'), requestId, kind: kindSchema, title: z.string().trim().min(1).max(60), coachId: id, roomId: z.string().trim().min(1).max(40), exclusive: z.boolean(), start: time, end: time, capacity: z.number().int().min(1).max(100), cost: z.number().int().min(1).max(100) }).strict(),
   z.object({ action: z.literal('editSlot'), requestId, sessionId: id, title: z.string().trim().min(1).max(60), roomId: z.string().trim().min(1).max(40), start: time, end: time, capacity: z.number().int().min(1).max(100) }).strict(),
@@ -37,6 +38,7 @@ export const commandSchema = z.discriminatedUnion('action', [
 ]);
 export type Command = z.infer<typeof commandSchema>;
 export interface Tx {
+  hasCoachWork(coachId: string, now: number): Promise<boolean>;
   get<K extends Table>(table: K, id: string): Promise<Tables[K] | undefined>;
   put<K extends Table>(table: K, value: Tables[K]): Promise<void>;
 }

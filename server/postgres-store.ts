@@ -28,6 +28,14 @@ export class PostgresStore implements Store {
         await client.query("SET LOCAL statement_timeout = '15s'");
         await client.query("SET LOCAL idle_in_transaction_session_timeout = '15s'");
         const tx: Tx = {
+          hasCoachWork: async (coachId, now) => {
+            const result = await client.query(`SELECT EXISTS (
+              SELECT 1 FROM public.ez_sessions s WHERE s.data->>'coachId' = $1 AND
+                ((s.data->>'status' = 'open' AND (s.data->>'end')::bigint > $2) OR EXISTS (
+                  SELECT 1 FROM public.ez_bookings b WHERE b.data->>'sessionId' = s.id AND b.data->>'status' = 'confirmed'
+                ))) AS pending`, [coachId, now]);
+            return result.rows[0].pending === true;
+          },
           get: async <K extends Table>(table: K, id: string) => {
             const result = await client.query(`SELECT data FROM ${sqlTable(table)} WHERE id = $1`, [id]);
             return result.rows.length ? record<K>(result.rows[0].data) : undefined;

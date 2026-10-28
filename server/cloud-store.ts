@@ -1,4 +1,4 @@
-import { Store, Table, Tables, Tx } from './model';
+import { BusinessError, Store, Table, Tables, Tx } from './model';
 
 // The SDK exposes loose types. Keep that uncertainty at this boundary rather
 // than propagating it into domain code. Shapes checked against installed SDK.
@@ -25,6 +25,8 @@ export class CloudStore implements Store {
   constructor(private db: CloudDatabase) {}
   transaction<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
     return this.db.runTransaction(async transaction => work({
+      // Legacy NoSQL adapter cannot provide a serializable cross-collection check.
+      hasCoachWork: async () => { throw new BusinessError('UNSUPPORTED', '当前存储不支持安全取消教练身份，请使用 PostgreSQL 环境'); },
       get: async <K extends Table>(table: K, id: string) => document<K>(checked(await transaction.collection(table).doc(id).get()).data),
       put: async <K extends Table>(table: K, value: Tables[K]) => { checked(await transaction.collection(table).doc(value.id).set(value)); },
     }), 3);

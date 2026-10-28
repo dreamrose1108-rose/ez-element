@@ -67,6 +67,25 @@ test('warm API invocations re-read trusted identity; client cannot register as a
   assert.deepEqual((await store.transaction(tx => tx.get('users', userKey(first))))?.roles, ['student']);
   assert.equal((await store.transaction(tx => tx.get('users', userKey(second))))?.name, 'B');
 });
+test('CloudBase transport metadata is ignored without relaxing business validation or trusted identity', async () => {
+  const store = new MemoryStore();
+  const identity = wechatIdentity(settings.appid, 'transport-user');
+  const caller = { uid: 'platform-user', customUserId: identity, isAnonymous: false };
+  const api = apiHandler(() => caller, () => store);
+  const userInfo = { uid: 'victim', customUserId: 'admin', roles: ['admin'] };
+  const tcbContext = { uid: 'victim', customUserId: 'admin', roles: ['admin'] };
+  const dashboard = await api({ action: 'dashboard', userInfo, tcbContext });
+  assert.ok(dashboard.ok && 'data' in dashboard && dashboard.data && 'profile' in dashboard.data && dashboard.data.profile === null);
+  assert.equal((await api({ action: 'register', name: 'Metadata test', phone: '13800000000', userInfo, tcbContext })).ok, true);
+  assert.deepEqual((await store.transaction(tx => tx.get('users', userKey(identity))))?.roles, ['student']);
+  for (const extra of [{ role: 'admin' }, { uid: 'victim' }, { unexpected: true }]) {
+    const response = await api({ action: 'dashboard', userInfo, tcbContext, ...extra });
+    assert.ok(!response.ok && 'code' in response && response.code === 'INVALID_INPUT');
+  }
+  const unauthenticated = await apiHandler(() => ({}), () => { throw new Error('must not open store'); })({ action: 'dashboard', userInfo: caller, tcbContext: caller });
+  assert.ok('code' in unauthenticated && unauthenticated.code === 'UNAUTHENTICATED');
+});
+
 test('client shares one in-flight login; errors permit retry and forced login clears old session', async () => {
   let tickets = 0; let signs = 0; let outs = 0; let valid = false; let fail = true;
   const session = new LoginSession({ hasSession: async () => valid,

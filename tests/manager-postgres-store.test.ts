@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { ManagerPostgresStore, PGSqlExecutor } from '../server/manager-postgres-store';
 import { pgTables } from '../server/postgres-store';
 import { Table } from '../server/model';
+import { GymService, userKey } from '../server/service';
 
 class FakeExecutor implements PGSqlExecutor {
   version = 0;
@@ -43,6 +44,21 @@ class FakeExecutor implements PGSqlExecutor {
     throw new Error(`Unexpected SQL: ${Sql}`);
   }
 }
+
+test('manager transaction checks all coach work beyond dashboard limit before role removal', async () => {
+  const executor = new FakeExecutor(); const store = new ManagerPostgresStore(executor);
+  const service = new GymService(store, () => 1000);
+  await store.transaction(async tx => {
+    await tx.put('users', { id: userKey('admin'), name: 'admin', phone: '13800000000', roles: ['admin'], status: 'active' });
+    await tx.put('users', { id: userKey('coach'), name: 'coach', phone: '13800000000', roles: ['student', 'coach'], status: 'active' });
+    for (let i = 0; i < 205; i++) await tx.put('sessions', { id: `s-${i}`, coachId: userKey('coach'), kind: 'private', title: 'test', roomId: 'open', exclusive: false, start: 1, end: i === 204 ? 3000 : 2, capacity: 1, reserved: 0, cost: 1, status: 'open', cancelHours: 12, cutoffMinutes: 60 });
+  });
+  const cmd = { action: 'setCoach', userId: userKey('coach'), enabled: false, requestId: 'remove-coach-test' };
+  await assert.rejects(service.execute('admin', cmd), { code: 'COACH_HAS_WORK' });
+  await store.transaction(async tx => { const s = (await tx.get('sessions', 's-204'))!; s.status = 'closed'; await tx.put('sessions', s); });
+  await service.execute('admin', cmd);
+  assert.deepEqual((await store.transaction(tx => tx.get('users', userKey('coach'))))?.roles, ['student']);
+});
 
 test('manager PostgreSQL store commits and lists records through ExecutePGSql', async () => {
   const executor = new FakeExecutor();

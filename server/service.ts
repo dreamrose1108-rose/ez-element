@@ -72,6 +72,20 @@ export class GymService {
     });
   }
   private async mutate(tx: Tx, actor: User, cmd: Exclude<Command, { action: 'register' | 'dashboard' }>, operation: string, now: number, rules: Rules, cancellationIds: string[] = []): Promise<{ id: string }> {
+    if (cmd.action === 'setCoach') {
+      role(actor, 'admin');
+      const target = await user(tx, cmd.userId);
+      if (cmd.enabled) {
+        role(target, 'student');
+        target.roles = [...new Set<Role>([...target.roles, 'coach'])];
+      } else {
+        requireThat(!await tx.hasCoachWork(target.id, now), 'COACH_HAS_WORK', '该教练还有未结束排课或未结算预约，请先在排课中关闭空闲时段、处理停课或完成出勤结算，再取消教练身份');
+        target.roles = target.roles.filter(r => r !== 'coach');
+        if (!target.roles.includes('student')) target.roles.push('student');
+      }
+      await tx.put('users', target);
+      return { id: target.id };
+    }
     if (cmd.action === 'approve') {
       role(actor, 'admin');
       const target = await tx.get('users', cmd.userId);
@@ -209,6 +223,24 @@ export class GymService {
     b.status = cmd.outcome;
     await ledger(tx, p, actor.id, 'consume', b.id, now, 0, -b.cost, b.cost);
     await tx.put('bookings', b); await notify(tx, b, s, cmd.outcome === 'attended' ? '到课已消课' : '爽约已消课', now);
+    // Purchase and package IDs are identical. Read the original receipt inside
+    // the settlement transaction; never infer a price from dashboard lists.
+    const purchase = await tx.get('purchaseRecords', p.id);
+    const validPrice = purchase && purchase.packageId === p.id && purchase.memberId === b.memberId
+      && Number.isSafeInteger(purchase.amountFen) && purchase.amountFen >= 0 && p.total > 0;
+    const remainingCredits = p.available + p.frozen;
+    const receipt = validPrice ? {
+      packageId: p.id,
+      deductedFen: Math.round(purchase.amountFen * p.consumed / p.total) - Math.round(purchase.amountFen * (p.consumed - b.cost) / p.total),
+      remainingFen: purchase.amountFen - Math.round(purchase.amountFen * p.consumed / p.total),
+      consumedCredits: b.cost, remainingCredits, frozenCredits: p.frozen,
+    } : undefined;
+    const money = (fen: number) => (fen / 100).toFixed(2);
+    const detail = `${actor.name}已确认${cmd.outcome === 'attended' ? '到课' : '爽约'}，本次扣除 ${b.cost} 课时。`
+      + (receipt ? `本次扣费 ¥${money(receipt.deductedFen)}，本课包剩余金额 ¥${money(receipt.remainingFen)}。金额按实收款分摊，尾差随累计消课结清。` : '历史收款记录缺失，金额暂无法核算，请联系门店。')
+      + `本课包剩余 ${remainingCredits} 课时（含已预约冻结 ${p.frozen} 课时）。以上为结算时余额，非可提现余额。`;
+    const title = cmd.outcome === 'attended' ? '到课已消课' : '爽约已消课';
+    await tx.put('inbox', { id: key(b.id, title, b.memberId), userId: b.memberId, title: `${title} · ${s.title}`, bookingId: b.id, at: now, detail, ...(receipt ? { receipt } : {}) });
     return { id: b.id };
   }
   private async dashboard(actorId: string) {
