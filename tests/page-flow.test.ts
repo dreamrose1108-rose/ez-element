@@ -11,7 +11,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
     for (const [n, roles] of [['student', ['student']], ['coach', ['coach']], ['admin', ['admin']]] as const) await tx.put('users', { id: userKey(n), name: n, phone: '13800000000', roles: [...roles], status: 'active' });
   });
   await service.execute('admin', { action: 'purchase', requestId: 'test-purchase', memberId: userKey('student'), kind: 'private', coachIds: [userKey('coach')], credits: 10, expiresAt: Date.now() + 90 * 86400000, amountFen: 10000, method: 'cash', note: 'test' });
-  interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; startScheduleDrag(e: object): void; moveScheduleDrag(e: object): void; endScheduleDrag(): Promise<void>; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
+  interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; startScheduleDrag(e: object): void; tapScheduleSlot(e: object): void; moveScheduleDrag(e: object): void; endScheduleDrag(): Promise<void>; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
   let page: PageHarness | undefined;
   let confirmModal = true;
   let actionSheetIndex = 0;

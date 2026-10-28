@@ -167,9 +167,9 @@ test('有预约的私教时段不能关闭；空闲时段关闭后可重新排�
   await f.publish();
 });
 
-test('拖选半小时格可在排课、休息和未安排间切换；已约状态不能覆盖', async () => {
+test('私教固定一小时且可从半点开始；排课、休息和未安排可切换，已约不能覆盖', async () => {
   const f = await fixture();
-  const start = f.now() + 3 * 86400000 + 30 * 60000; const end = start + 90 * 60000;
+  const start = f.now() + 3 * 86400000 + 30 * 60000; const end = start + 60 * 60000;
   const rest = await f.call('coach', 'setSlotState', { coachId: userKey('coach'), start, end, state: 'rest' });
   let session = (await f.get('sessions')).find(s => s.id === rest.id)!;
   assert.equal(session.status, 'rest'); assert.equal(session.title, '休息');
@@ -181,6 +181,9 @@ test('拖选半小时格可在排课、休息和未安排间切换；已约状�
   await f.call('student', 'book', { sessionId: rest.id, packageId: pack.id });
   await rejectsCode(f.call('coach', 'setSlotState', { coachId: userKey('coach'), sessionId: rest.id, start, end, state: 'rest' }), 'BOOKED');
   await rejectsCode(f.call('coach2', 'setSlotState', { coachId: userKey('coach2'), start: start + 15 * 60000, end: end + 15 * 60000, state: 'open' }), 'TIME');
+  await rejectsCode(f.call('coach2', 'setSlotState', { coachId: userKey('coach2'), start, end: start + 30 * 60000, state: 'open' }), 'TIME');
+  await rejectsCode(f.call('coach2', 'setSlotState', { coachId: userKey('coach2'), start, end: start + 90 * 60000, state: 'open' }), 'TIME');
+  await rejectsCode(f.publish({ coachId: userKey('coach2'), start, end: start + 90 * 60000 }), 'TIME');
 });
 
 test('失败事务完整回滚；请求键不能用于不同操作；非法负金额被拒绝', async () => {

@@ -106,6 +106,7 @@ export class GymService {
       requireThat(hasRole(actor, 'admin') || (hasRole(actor, 'coach') && cmd.coachId === actor.id && cmd.kind === 'private'), 'FORBIDDEN', '仅管理员可发布团课，教练只能设置自己的私教时段');
       role(await user(tx, cmd.coachId), 'coach');
       requireThat(cmd.end > cmd.start && cmd.start > now && cmd.end - cmd.start <= 4 * 3600000 && dayKey(cmd.start) === dayKey(cmd.end - 1), 'TIME', '课程须在未来、同一天内且不超过四小时');
+      requireThat(cmd.kind !== 'private' || cmd.end - cmd.start === 3600000, 'TIME', '私教课固定为一小时，可从整点或半点开始');
       requireThat(cmd.kind !== 'private' || cmd.capacity === 1, 'CAPACITY', '私教人数必须为一人');
       const s: Session = { id: operation, kind: cmd.kind, title: cmd.title, coachId: cmd.coachId, roomId: cmd.roomId, exclusive: cmd.exclusive, start: cmd.start, end: cmd.end, capacity: cmd.capacity, cost: cmd.cost, reserved: 0, status: 'open', cancelHours: cmd.kind === 'private' ? rules.privateCancelHours : rules.groupCancelHours, cutoffMinutes: rules.cutoffMinutes };
       const owners = [`coach:${s.coachId}`, ...(s.exclusive ? [`room:${s.roomId}`] : [])].sort();
@@ -117,6 +118,7 @@ export class GymService {
       role(await user(tx, cmd.coachId), 'coach');
       const duration = cmd.end - cmd.start;
       requireThat(cmd.end > cmd.start && cmd.start > now && cmd.start % 1800000 === 0 && cmd.end % 1800000 === 0 && duration >= 1800000 && duration <= 4 * 3600000 && duration % 1800000 === 0 && dayKey(cmd.start) === dayKey(cmd.end - 1), 'TIME', '请拖选未来的连续时段，须按 30 分钟对齐且不超过 4 小时');
+      requireThat(cmd.state !== 'open' || duration === 3600000, 'TIME', '私教课固定为一小时，可从整点或半点开始');
       const existing = cmd.sessionId ? await tx.get('sessions', cmd.sessionId) : undefined;
       if (existing) {
         requireThat(existing.coachId === cmd.coachId && existing.start === cmd.start && existing.end === cmd.end && existing.kind === 'private', 'STATE', '排班状态已变化，请刷新后重试');

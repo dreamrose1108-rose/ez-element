@@ -38,22 +38,22 @@
       <view class="segments" wx:if="{{role !== 'coach'}}"><button class="{{kind === 'private' ? 'selected' : ''}}" data-kind="private" bindtap="chooseKind">私教预约</button><button class="{{kind === 'group' ? 'selected' : ''}}" data-kind="group" bindtap="chooseKind">团课场次</button></view>
       <picker wx:if="{{role !== 'coach'}}" range="{{coaches}}" range-key="name" value="{{coachIndex}}" bindchange="chooseCoach"><view class="picker">教练：{{coaches[coachIndex].name || '暂无教练'}} <text>更换 ›</text></view></picker>
       <view wx:if="{{role !== 'student' && kind !== 'group'}}" class="card slot-board">
-        <view class="row"><view><view class="title">一周拖拽排班</view><text class="muted">{{day}} 起连续 7 天 · 每格 30 分钟</text></view><text class="badge">08:00–22:00</text></view>
+        <view class="row"><view><view class="title">一周拖拽排班</view><text class="muted">{{day}} 起连续 7 天 · 每格 30 分钟 · 每节课 1 小时</text></view><text class="badge">08:00–22:00</text></view>
         <view class="slot-legend"><text class="free">可选</text><text class="scheduled">已排课</text><text class="booked">已约</text><text class="rest">休息</text></view>
         <view class="week-timeline">
           <view class="week-labels"><view class="week-label-head">日期</view><view wx:for="{{weekScheduleDays}}" wx:key="key" class="week-day-label"><text>{{item.label}}</text><text>{{item.short}}</text></view></view>
-          <scroll-view scroll-x enhanced show-scrollbar class="week-time-scroll">
+          <scroll-view scroll-x="{{!dragging}}" enhanced show-scrollbar class="week-time-scroll">
             <view class="week-time-canvas">
               <view class="week-time-head"><text wx:for="{{scheduleTimes}}" wx:key="key">{{item.label}}</text></view>
               <view wx:for="{{weekScheduleDays}}" wx:key="key" wx:for-item="dayItem" class="week-day-slots">
-                <view wx:for="{{dayItem.slots}}" wx:key="key" wx:for-item="slot" wx:if="{{slot.visible}}" class="schedule-block {{slot.state}} {{slot.disabled ? 'disabled' : ''}} {{slot.selected ? 'selected' : ''}}" style="grid-column:span {{slot.span}}" data-index="{{slot.index}}" bindtouchstart="startScheduleDrag" catchtouchmove="moveScheduleDrag" bindtouchend="endScheduleDrag" bindtouchcancel="cancelScheduleDrag">
+                <view wx:for="{{dayItem.slots}}" wx:key="key" wx:for-item="slot" wx:if="{{slot.visible}}" class="schedule-block {{slot.state}} {{slot.disabled ? 'disabled' : ''}} {{slot.selected ? 'selected' : ''}}" style="grid-column:span {{slot.span}}" data-index="{{slot.index}}" bindtap="tapScheduleSlot" bindlongpress="startScheduleDrag" bindtouchmove="moveScheduleDrag" bindtouchend="endScheduleDrag" bindtouchcancel="cancelScheduleDrag">
                   <text class="slot-time">{{slot.sessionId ? slot.displayTime : slot.stateName}}</text><text class="slot-state">{{slot.sessionId ? slot.stateName + ' · ' + slot.durationLabel : ''}}</text>
                 </view>
               </view>
             </view>
           </scroll-view>
         </view>
-        <text class="muted">左右滑动查看全天。一次拖拽就是一节课，连续半小时会合并成一张课程卡片；“已约”不能修改。</text>
+        <text class="muted">普通左右滑动查看全天；轻点或长按拖过相邻两格，都会安排一节 1 小时课程。开始时间可选整点或半点；“已约”不能修改。</text>
       </view>
       <view wx:if="{{role === 'admin' && kind === 'group'}}" class="card publish-card">
         <view class="title">发布团课场次</view>

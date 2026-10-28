@@ -122,6 +122,10 @@ Page({
     this.setData({ dragging: slot.state === 'free' && !slot.disabled, scheduleSlots: this.data.scheduleSlots.map((item, i) => ({ ...item, selected: i === index && slot.state === 'free' && !slot.disabled })) });
     wx.createSelectorQuery().selectAll('.schedule-block').boundingClientRect(result => { dragRects = (result as unknown as { top: number; bottom: number; left: number; right: number; dataset?: { index?: string | number } }[]) || []; }).exec();
   },
+  tapScheduleSlot(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.dragging) return;
+    this.startScheduleDrag(e); this.endScheduleDrag();
+  },
   moveScheduleDrag(e: WechatMiniprogram.TouchEvent) {
     if (dragAnchor < 0 || !this.data.dragging) return;
     const touch = e.touches[0]; if (!touch) return;
@@ -130,7 +134,7 @@ Page({
     const direction = index >= dragAnchor ? 1 : -1; let next = dragAnchor;
     while (next !== index) {
       const candidate = next + direction; const size = Math.abs(candidate - dragAnchor) + 1; const slot = this.data.scheduleSlots[candidate];
-      if (!slot || slot.day !== this.data.scheduleSlots[dragAnchor]?.day || slot.state !== 'free' || slot.disabled || size > 8) break;
+      if (!slot || slot.day !== this.data.scheduleSlots[dragAnchor]?.day || slot.state !== 'free' || slot.disabled || size > 2) break;
       next = candidate;
     }
     dragCurrent = next; const low = Math.min(dragAnchor, dragCurrent), high = Math.max(dragAnchor, dragCurrent);
@@ -140,7 +144,13 @@ Page({
   async endScheduleDrag() {
     if (dragAnchor < 0) return;
     const anchor = dragAnchor; const current = dragCurrent; const slot = this.data.scheduleSlots[anchor];
-    const low = Math.min(anchor, current), high = Math.max(anchor, current); const rangeStart = this.data.scheduleSlots[low]?.start; const rangeEnd = this.data.scheduleSlots[high]?.end;
+    let low = Math.min(anchor, current), high = Math.max(anchor, current);
+    if (slot?.state === 'free' && low === high) {
+      const next = this.data.scheduleSlots[high + 1];
+      if (next?.day === slot.day && next.state === 'free' && !next.disabled) high += 1;
+      else { this.cancelScheduleDrag(); await wx.showModal({ title: '无法安排一节课', content: '私教课固定 1 小时，后续半小时当前不可用。请选择其他开始时间。', showCancel: false }); return; }
+    }
+    const rangeStart = this.data.scheduleSlots[low]?.start; const rangeEnd = this.data.scheduleSlots[high]?.end;
     this.cancelScheduleDrag(); if (!slot || rangeStart === undefined || rangeEnd === undefined) return;
     if (slot.state === 'booked') { await wx.showModal({ title: '该时段已约', content: '已有学员预约，不能改为休息或取消排课。请在课程详情中处理预约。', showCancel: false }); return; }
     if (slot.start <= Date.now()) { await wx.showModal({ title: '暂不可修改', content: '已开始或已过去的时间不能调整。', showCancel: false }); return; }
