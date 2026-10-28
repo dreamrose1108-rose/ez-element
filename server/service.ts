@@ -115,7 +115,8 @@ export class GymService {
     if (cmd.action === 'setSlotState') {
       requireThat(hasRole(actor, 'admin') || (hasRole(actor, 'coach') && cmd.coachId === actor.id), 'FORBIDDEN', '只能维护自己的排班');
       role(await user(tx, cmd.coachId), 'coach');
-      requireThat(cmd.end > cmd.start && cmd.start > now && cmd.start % 1800000 === 0 && cmd.end - cmd.start === 3600000 && dayKey(cmd.start) === dayKey(cmd.end - 1), 'TIME', '请选择未来、以整点或半点开始的一小时时段');
+      const duration = cmd.end - cmd.start;
+      requireThat(cmd.end > cmd.start && cmd.start > now && cmd.start % 1800000 === 0 && cmd.end % 1800000 === 0 && duration >= 1800000 && duration <= 4 * 3600000 && duration % 1800000 === 0 && dayKey(cmd.start) === dayKey(cmd.end - 1), 'TIME', '请拖选未来的连续时段，须按 30 分钟对齐且不超过 4 小时');
       const existing = cmd.sessionId ? await tx.get('sessions', cmd.sessionId) : undefined;
       if (existing) {
         requireThat(existing.coachId === cmd.coachId && existing.start === cmd.start && existing.end === cmd.end && existing.kind === 'private', 'STATE', '排班状态已变化，请刷新后重试');

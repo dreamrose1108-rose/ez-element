@@ -167,9 +167,9 @@ test('有预约的私教时段不能关闭；空闲时段关闭后可重新排�
   await f.publish();
 });
 
-test('点击时间格可在排课、休息和未安排间切换；已约状态不能覆盖', async () => {
+test('拖选半小时格可在排课、休息和未安排间切换；已约状态不能覆盖', async () => {
   const f = await fixture();
-  const start = f.now() + 3 * 86400000 + 30 * 60000; const end = start + 3600000;
+  const start = f.now() + 3 * 86400000 + 30 * 60000; const end = start + 90 * 60000;
   const rest = await f.call('coach', 'setSlotState', { coachId: userKey('coach'), start, end, state: 'rest' });
   let session = (await f.get('sessions')).find(s => s.id === rest.id)!;
   assert.equal(session.status, 'rest'); assert.equal(session.title, '休息');

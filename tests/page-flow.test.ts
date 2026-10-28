@@ -11,7 +11,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
     for (const [n, roles] of [['student', ['student']], ['coach', ['coach']], ['admin', ['admin']]] as const) await tx.put('users', { id: userKey(n), name: n, phone: '13800000000', roles: [...roles], status: 'active' });
   });
   await service.execute('admin', { action: 'purchase', requestId: 'test-purchase', memberId: userKey('student'), kind: 'private', coachIds: [userKey('coach')], credits: 10, expiresAt: Date.now() + 90 * 86400000, amountFen: 10000, method: 'cash', note: 'test' });
-  interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; tapScheduleSlot(e: object): Promise<void>; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
+  interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; startScheduleDrag(e: object): void; moveScheduleDrag(e: object): void; endScheduleDrag(): Promise<void>; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
   let page: PageHarness | undefined;
   let confirmModal = true;
   let actionSheetIndex = 0;
@@ -30,7 +30,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   vm.runInNewContext(bundle, {
     console, module: { exports: {} }, exports: {},
     Page(p: PageHarness) { page = p; p.setData = value => Object.assign(p.data, value); },
-    wx: { pageScrollTo(options: { scrollTop: number }) { scrollTop = options.scrollTop; }, showToast() {}, showActionSheet: async () => ({ tapIndex: actionSheetIndex }), showModal: async () => ({ confirm: confirmModal, content: '场地维护测试' }), request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
+    wx: { pageScrollTo(options: { scrollTop: number }) { scrollTop = options.scrollTop; }, showToast() {}, showActionSheet: async () => ({ tapIndex: actionSheetIndex }), showModal: async () => ({ confirm: confirmModal, content: '场地维护测试' }), createSelectorQuery() { const query = { selectAll() { return query; }, boundingClientRect(callback: (rects: object[]) => void) { callback(Array.from({ length: 28 }, (_, i) => ({ top: Math.floor(i / 4) * 50, bottom: Math.floor(i / 4) * 50 + 48, left: (i % 4) * 100, right: (i % 4) * 100 + 98 }))); return query; }, exec() {} }; return query; }, request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
       service.execute(opts.data.role, opts.data.command).then(data => opts.success({ statusCode: 200, data: { ok: true, data } }), e => opts.success({ statusCode: 200, data: { ok: false, message: e.message } }));
     } },
   });
@@ -74,13 +74,14 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   const days = p.data.days as { key: string }[];
   assert.equal(days.length, 7); const day = days[3]!.key;
   p.setData({ day }); p.renderData();
-  let grid = p.data.scheduleSlots as { key: string; startLabel: string; state: string }[];
+  let grid = p.data.scheduleSlots as { index: number; startLabel: string; state: string }[];
   const restCell = grid.find(item => item.startLabel === '08:00')!;
-  actionSheetIndex = 1; await p.tapScheduleSlot({ currentTarget: { dataset: { key: restCell.key } } });
-  grid = p.data.scheduleSlots as { key: string; startLabel: string; state: string }[];
+  actionSheetIndex = 1; p.startScheduleDrag({ currentTarget: { dataset: { index: restCell.index } } }); await p.endScheduleDrag();
+  grid = p.data.scheduleSlots as { index: number; startLabel: string; state: string }[];
   assert.equal(grid.find(item => item.startLabel === '08:00')?.state, 'rest');
   const publishCell = grid.find(item => item.startLabel === '09:30')!;
-  actionSheetIndex = 0; await p.tapScheduleSlot({ currentTarget: { dataset: { key: publishCell.key } } });
+  actionSheetIndex = 0; p.startScheduleDrag({ currentTarget: { dataset: { index: publishCell.index } } });
+  p.moveScheduleDrag({ touches: [{ clientX: 20, clientY: 75 }] }); await p.endScheduleDrag();
   assert.equal(p.data.error, '');
   p.setData({ role: 'student' }); await p.refresh();
   let slots = p.data.sessions as { id: string; startLabel: string }[];
@@ -91,7 +92,8 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   const bookings = p.data.bookings as { id: string }[];
   p.setData({ role: 'coach' }); await p.refresh(); assert.equal((p.data.bookings as object[]).length, 1);
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:30')?.state, 'booked');
-  assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:00')?.state, 'blocked');
+  assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '10:00')?.state, 'booked');
+  assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:00')?.state, 'free');
   p.setData({ role: 'student' }); await p.refresh();
   await p.mutate({ action: 'cancel', bookingId: bookings[0]!.id }, '已取消');
   assert.equal(p.data.totalFrozen, 0); assert.equal(p.data.totalAvailable, 10);
