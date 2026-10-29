@@ -358,7 +358,7 @@ export class GymService {
       await tx.put('sessions', s); await tx.put('bookings', b);
       await notify(tx, b, s, '预约已取消', now); return { id: b.id };
     }
-    requireThat(hasRole(actor, 'admin') || (hasRole(actor, 'coach') && s.coachId === actor.id), 'FORBIDDEN', '只能结算本人授课预约');
+    requireThat(hasRole(actor, 'coach') && s.coachId === actor.id, 'FORBIDDEN', '只能由本节课的授课教练确认出勤');
     if (b.status === cmd.outcome) return { id: b.id };
     requireThat(b.status === 'confirmed' && s.end <= now, 'STATE', '课程结束后才能确认出勤，已结算记录需走纠错流程');
     b.status = cmd.outcome;

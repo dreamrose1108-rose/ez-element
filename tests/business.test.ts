@@ -105,6 +105,7 @@ test('教练工资按全兼职制度核算今日收入和本月预估，爽约�
   const attended = await f.call('student', 'book', { sessionId: attendedSession.id, packageId: pack.id });
   const absent = await f.call('student', 'book', { sessionId: absentSession.id, packageId: pack.id });
   f.advance(2 * 86400000 + 4 * 3600000);
+  await rejectsCode(f.call('admin', 'settle', { bookingId: attended.id, outcome: 'attended' }), 'FORBIDDEN');
   await f.call('coach', 'settle', { bookingId: attended.id, outcome: 'attended' });
   await f.call('coach', 'settle', { bookingId: absent.id, outcome: 'absent' });
   // 当天再登记一笔归属该教练的私教销售，使月业绩超过 6 万。

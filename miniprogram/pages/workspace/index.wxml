@@ -22,7 +22,7 @@
       </view>
       <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
       <view wx:if="{{role === 'student'}}" class="pay-card"><text class="pay-eyebrow">通用储值 · 私教 / 团课</text><view class="pay-title">{{wallet ? wallet.available : '¥0.00'}}</view><text class="pay-detail">{{wallet && wallet.expired ? '已到期，请联系门店续期' : '可用余额'}} · 预约冻结 {{wallet ? wallet.frozen : '¥0.00'}}</text><text class="pay-detail">私教 {{ownPrivatePrice}} / 课时 · 团课 {{ownGroupPrice}} / 课时</text></view>
-      <view wx:if="{{role !== 'student'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{role === 'admin' ? pending.length : myCount}}</text><text>{{role === 'admin' ? '待审核学员' : '待上课预约'}}</text></view></view>
+      <view wx:if="{{role === 'coach'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
       <view wx:if="{{role === 'admin' && adminFinance}}" class="admin-finance-card">
         <view class="row"><view><text class="finance-eyebrow">今日经营概览</text><view class="finance-total">{{adminFinance.todayRevenueLabel}}</view><text class="finance-caption">今日公司实收</text></view><text class="badge">实时预估</text></view>
         <view class="finance-metrics"><view><text>{{adminFinance.todayConsumedLabel}}</text><text>今日消课金额</text></view><view><text>{{adminFinance.todayCoachPayLabel}}</text><text>教练工资预估</text></view><view class="{{adminFinance.negative ? 'negative' : ''}}"><text>{{adminFinance.todayAfterCoachPayLabel}}</text><text>实收减教练工资</text></view></view>
@@ -38,7 +38,7 @@
       </view>
       <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
       <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
-      <view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
+      <block wx:if="{{role !== 'admin'}}"><view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
       <view wx:if="{{!bookings.length}}" class="empty">暂无预约记录</view>
       <view class="card booking-card {{item.statusClass}}" wx:for="{{bookings}}" wx:key="id">
         <view class="row"><text class="title">{{item.title}}</text><text class="badge booking-status status-{{item.status}}">{{item.statusName}}</text></view>
@@ -48,9 +48,10 @@
         <button wx:if="{{role === 'student' && item.canCancel}}" class="secondary" data-id="{{item.id}}" bindtap="cancelBooking" disabled="{{busy}}">取消预约</button>
         <text class="muted" wx:if="{{role === 'student' && item.status === 'confirmed' && !item.canCancel}}">需要变更请联系门店</text>
         <view class="error" wx:if="{{error && errorScope === 'settle' && errorId === item.id}}">{{error}}</view>
-        <view wx:if="{{role !== 'student' && item.canSettle}}" class="row actions"><button class="primary" data-id="{{item.id}}" data-outcome="attended" bindtap="settle" disabled="{{busy}}">确认到课</button><button class="secondary" data-id="{{item.id}}" data-outcome="absent" bindtap="settle" disabled="{{busy}}">标记爽约</button></view>
-        <block wx:if="{{role !== 'student' && item.notificationLabel}}"><text class="muted">{{item.notificationLabel}}</text><view class="error" wx:if="{{error && errorScope === 'sendReceipt' && errorId === item.id}}">{{error}}</view><button wx:if="{{item.canRetryNotification}}" class="secondary" data-id="{{item.id}}" bindtap="retryReceiptNotification" disabled="{{busy}}">重试微信通知</button></block>
+        <view wx:if="{{role === 'coach' && item.canSettle}}" class="row actions"><button class="primary" data-id="{{item.id}}" data-outcome="attended" bindtap="settle" disabled="{{busy}}">确认到课</button><button class="secondary" data-id="{{item.id}}" data-outcome="absent" bindtap="settle" disabled="{{busy}}">标记爽约</button></view>
+        <block wx:if="{{role === 'coach' && item.notificationLabel}}"><text class="muted">{{item.notificationLabel}}</text><view class="error" wx:if="{{error && errorScope === 'sendReceipt' && errorId === item.id}}">{{error}}</view><button wx:if="{{item.canRetryNotification}}" class="secondary" data-id="{{item.id}}" bindtap="retryReceiptNotification" disabled="{{busy}}">重试微信通知</button></block>
       </view>
+      </block>
     </block>
     <block wx:if="{{tab === 'schedule'}}">
       <view class="page-title">{{role === 'student' ? '为训练留个时间' : '一周课程安排'}}</view><text class="muted">{{role === 'student' ? '私教选时段，团课选已发布场次' : '按具体日期管理，已有预约的时段不可直接关闭'}}</text>
