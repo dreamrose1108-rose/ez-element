@@ -1,4 +1,50 @@
 /* Shared yellow/gray theme lives in app.wxss. */
+.member-save-error{grid-column:1 / -1;}
+.member-section-tabs{display:flex;gap:12rpx;margin:24rpx 0;}
+.member-section-tabs button{flex:1;display:flex;justify-content:center;align-items:center;gap:14rpx;padding:22rpx 12rpx;background:#eceee6;color:#6c7064;border-radius:14rpx;font-size:26rpx;}
+.member-section-tabs button.active{background:#252629;color:#fff;}
+.member-section-tabs button text{padding:2rpx 10rpx;font-size:20rpx;border-radius:6rpx;background:#ffffff26;}
+.member-section-tabs button .pending-count{background:#f5cf38;color:#453a16;}
+.review-intro{padding:24rpx;border-left:5rpx solid #e1bd36;background:#faf5e2;border-radius:4rpx 14rpx 14rpx 4rpx;}
+.review-intro .title{font-size:28rpx;margin-bottom:8rpx;}
+.review-card{border-color:#e6d9a4;}
+.review-badge{padding:8rpx 14rpx;background:#fff0c2;color:#8a5700;border-radius:8rpx;font-size:21rpx;}
+.review-card button{width:100%;margin-top:22rpx;}
+.badge.booking-status.status-confirmed{background:#fff0c2;color:#8a5700;}
+.badge.booking-status.status-attended{background:#d9eedf;color:#24633a;}
+.badge.booking-status.status-cancelled{background:#eceee9;color:#6a7065;}
+.badge.booking-status.status-absent{background:#fbe1dc;color:#a23e30;}
+.coach-member-card .row .title{margin:0;}
+.coach-member-card .row{margin-bottom:10rpx;}
+.coach-member-pressed{background:#f5f3e6;}
+.coach-member-sheet .card{margin-top:20rpx;background:#f8f9f4;}
+.copy-card{padding:28rpx;}
+.copy-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16rpx;}
+.copy-heading .title{font-size:30rpx;margin:0 0 6rpx;}
+.copy-subtitle{font-size:21rpx;color:#808378;}
+.copy-coach{max-width:180rpx;padding:8rpx 14rpx;background:#f2f3ec;border-radius:8rpx;font-size:21rpx;color:#55594d;overflow-wrap:anywhere;}
+.copy-tabs{display:flex;gap:8rpx;padding:6rpx;margin:26rpx 0;background:#f1f2ec;border-radius:14rpx;}
+.copy-tabs button{flex:1;margin:0;padding:16rpx 8rpx;background:transparent;color:#7a7e70;font-size:24rpx;border-radius:10rpx;line-height:1.5;}
+.copy-tabs button.active{background:#252629;color:#fff;font-weight:600;}
+.copy-dates{display:flex;align-items:center;gap:12rpx;}
+.copy-dates>picker,.copy-dates>.copy-date{flex:1;min-width:0;}
+.copy-date{padding:22rpx 16rpx;border:1rpx solid #e5e7dd;background:#f8f9f4;border-radius:14rpx;box-sizing:border-box;}
+.copy-date.destination{background:#fffdf2;border-color:#e9d98e;}
+.copy-date text{display:block;}
+.copy-label{font-size:20rpx;color:#777b6d;margin-bottom:14rpx;}
+.copy-date-value{font-size:26rpx;font-weight:600;color:#252629;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.copy-date-value.placeholder{color:#969982;font-weight:400;}
+.copy-date-action,.copy-range{font-size:20rpx;margin-top:12rpx;color:#777b6d;}
+.copy-arrow{flex:none;color:#9b9e90;font-size:28rpx;}
+.copy-summary{display:flex;align-items:center;justify-content:space-between;margin:24rpx 0 18rpx;color:#707466;font-size:23rpx;}
+.copy-count{font-size:36rpx;font-weight:700;color:#252629;font-variant-numeric:tabular-nums;}
+.copy-warning{display:block;background:#faf4df;border-left:4rpx solid #ddbc42;padding:18rpx 20rpx;margin:16rpx 0;font-size:21rpx;line-height:1.7;color:#807047;border-radius:4rpx 12rpx 12rpx 4rpx;}
+.copy-warning text{display:block;}
+.copy-warning-title{font-size:22rpx;font-weight:600;margin-bottom:4rpx;color:#66582d;}
+.copy-card .copy-submit{width:100%;margin:20rpx 0 16rpx;padding:24rpx 12rpx;}
+.copy-footnote{display:block;text-align:center;font-size:20rpx;line-height:1.7;color:#898c80;}
+.copy-footnote text{display:block;}
+@media (max-width:375px){.copy-card{padding:22rpx;}.copy-dates{gap:8rpx;}.copy-date{padding:20rpx 12rpx;}.copy-date-value{font-size:24rpx;}}
 
 .edit-sheet{max-height:88vh;}
 .member-sheet{max-height:85vh;box-sizing:border-box;}
@@ -85,3 +131,125 @@
 .schedule-block.disabled{opacity:.5;}
 .slot-time{max-width:100%;font-size:19rpx;font-weight:800;white-space:normal;}
 .slot-state{font-size:16rpx;font-weight:700;margin-top:5rpx;}
+
+/* Workspace visual system: compact navigation, editorial headings, labelled forms. */
+page{background:#f7f7f2;}
+.page{padding-left:30rpx;padding-right:30rpx;}
+.workspace-header{margin:-28rpx -30rpx 28rpx;padding:20rpx 30rpx 0;background:#f7f7f2;border-color:#e4e4dc;}
+.workspace-header .brand{margin-bottom:18rpx;}
+.workspace-header .brand-cn{font-size:32rpx;letter-spacing:0;}
+.workspace-header .brand-en{font-size:13rpx;letter-spacing:3rpx;color:#70716b;margin-top:3rpx;}
+.workspace-header .badge{background:#eeeee6;color:#5d5f56;font-size:20rpx;border-radius:8rpx;}
+.workspace-header .roles{padding:5rpx;background:#eaeae3;border-radius:14rpx;margin-bottom:8rpx;}
+.workspace-header .roles button{padding:14rpx 6rpx;font-size:23rpx;border-radius:10rpx;}
+.top-nav{gap:0;padding-bottom:0;}
+.top-nav button{position:relative;padding:25rpx 0 23rpx;font-size:23rpx;border-radius:0;color:#72746b;}
+.top-nav .on{background:transparent;color:#252629;}
+.top-nav .on::before{content:"";position:absolute;bottom:0;left:25%;right:25%;height:6rpx;background:#f5cf38;border-radius:5rpx 5rpx 0 0;}
+.page-title{font-size:39rpx;line-height:1.35;letter-spacing:-1rpx;margin:14rpx 0 10rpx;}
+.greeting{font-size:36rpx;margin:22rpx 0;}
+.muted{color:#73766c;font-size:23rpx;line-height:1.65;}
+.section{font-size:29rpx;margin:34rpx 0 16rpx;}
+.card{border-color:#e6e6de;border-radius:22rpx;padding:28rpx;margin:22rpx 0;}
+.title{font-size:28rpx;line-height:1.45;}
+.hero{padding:34rpx;min-height:270rpx;border-radius:24rpx;}
+.hero-title{font-size:43rpx;line-height:1.35;margin:20rpx 0;}
+.hero-sub{font-size:21rpx;}
+.ring{right:-90rpx;top:22rpx;width:285rpx;height:285rpx;border-width:48rpx;}
+.metrics{padding:25rpx 8rpx;border:1rpx solid #e6e6de;border-radius:20rpx;}
+.metrics>view{flex:1;min-width:0;}
+.metrics>view+view{border-left:1rpx solid #e8e8e1;}
+.number{font-size:44rpx;font-variant-numeric:tabular-nums;}
+.primary{border-radius:14rpx;font-weight:700;}
+.page .secondary{border:1rpx solid #e1e2da;background:#eeeee7;border-radius:14rpx;}
+.page button.wide{padding:25rpx 28rpx;}
+.quick-actions button{font-size:22rpx;padding:22rpx 12rpx;}
+.badge{font-size:20rpx;border-radius:8rpx;}
+.booking-card{border-left-width:5rpx;}
+.price-detail{font-size:22rpx;background:#faf4da;padding:14rpx 16rpx;}
+.price-detail text{font-size:22rpx;}
+.schedule{font-size:26rpx;}
+.empty{margin:20rpx 0;padding:44rpx 24rpx;border:1rpx dashed #dcded3;border-radius:20rpx;background:#f1f2eb;font-size:24rpx;}
+.picker,input{border-color:#e3e5da;background:#f8f9f4;border-radius:14rpx;}
+.picker{padding:22rpx;font-size:25rpx;}
+input{font-size:26rpx;height:88rpx;}
+.dates .date{border:1rpx solid #e5e5dc;border-radius:16rpx;}
+.admin-finance-card{border:1rpx solid #dddcd0;box-shadow:none;padding:30rpx;border-radius:24rpx;}
+.finance-eyebrow{color:#6e715f;letter-spacing:2rpx;font-size:20rpx;}
+.finance-total{font-size:62rpx;letter-spacing:-2rpx;margin:12rpx 0 6rpx;font-variant-numeric:tabular-nums;}
+.finance-metrics{gap:8rpx;margin:28rpx 0;}
+.finance-metrics view{padding:20rpx 6rpx;background:#f3f4ed;min-width:0;}
+.finance-metrics text:first-child{font-size:26rpx;overflow-wrap:anywhere;}
+.coach-pay-row{padding:22rpx 0;}
+.pay-card{box-shadow:none;border-radius:24rpx;padding:32rpx;}
+.pay-title{font-size:58rpx;letter-spacing:-1rpx;}
+.pay-breakdown text{line-height:1.6;}
+.page-heading{margin:30rpx 0 26rpx;}
+.page-kicker{color:#73766c;font-size:18rpx;letter-spacing:2rpx;font-weight:600;}
+.purchase-card{padding:28rpx;}
+.form-section-head{display:flex;align-items:center;gap:18rpx;margin-bottom:24rpx;}
+.form-section-head .title{margin:0 0 4rpx;font-size:28rpx;}
+.form-section-head .muted{font-size:21rpx;}
+.step-number{display:flex;align-items:center;justify-content:center;flex:0 0 52rpx;height:52rpx;background:#252629;color:#f5cf38;border-radius:12rpx;font-size:22rpx;font-weight:800;}
+.form-divider{border-top:1rpx solid #e8e9e1;padding-top:28rpx;margin-top:18rpx;}
+.field-label{display:block;font-size:23rpx;font-weight:600;color:#55594d;margin-bottom:10rpx;}
+.form-columns{display:flex;gap:18rpx;}
+.form-field{flex:1;min-width:0;}
+.purchase-card input,.purchase-card .picker{margin:0 0 22rpx;}
+.field-select{display:flex;align-items:center;justify-content:space-between;gap:12rpx;min-height:88rpx;}
+.field-select>text{float:none;color:#252629;}
+.field-select>text:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.field-select .field-arrow{color:#8a8e80;font-size:30rpx;flex-shrink:0;}
+.field-select .field-placeholder{color:#8a8e80;}
+.purchase-card .purchase-submit{width:100%;margin:8rpx 0 18rpx;padding:26rpx 12rpx;}
+.form-footnote{display:block;font-size:20rpx;color:#86897e;line-height:1.6;text-align:center;}
+.purchase-total{display:flex;align-items:center;justify-content:space-between;gap:16rpx;background:#faf3d5;border-radius:14rpx;padding:24rpx;margin-bottom:12rpx;}
+.purchase-total .field-label{margin-bottom:4rpx;}
+.purchase-total .muted{font-size:20rpx;}
+.purchase-total-value{font-size:36rpx;font-weight:800;color:#252629;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right;}
+.price-help{display:block;font-size:21rpx;line-height:1.6;color:#73766c;margin-bottom:24rpx;}
+.overlay{background:rgba(25,28,22,.48);padding-top:24rpx;}
+.sheet{border-radius:32rpx 32rpx 0 0;padding:30rpx 30rpx calc(40rpx + env(safe-area-inset-bottom));box-sizing:border-box;}
+.member-sheet,.edit-sheet{width:100%;max-height:86vh;padding:0;}
+.sheet-content{width:100%;box-sizing:border-box;padding:30rpx 30rpx calc(40rpx + env(safe-area-inset-bottom));}
+.sheet .row>.page-title{flex:1;min-width:0;font-size:34rpx;}
+.sheet .compact{width:auto;flex:0 0 auto;padding:14rpx 24rpx;font-size:22rpx;margin:0;border-radius:12rpx;}
+.sheet input{width:100%;margin:10rpx 0 24rpx;}
+.sheet .picker{margin:10rpx 0 24rpx;}
+.sheet .save-member,.sheet .save-slot{width:100%;margin:14rpx 0 0;padding:25rpx;}
+.sheet .section{font-size:27rpx;margin:28rpx 0 18rpx;}
+.sheet .notice{font-size:22rpx;background:#f6f3e4;color:#676851;}
+.sheet .coach-pay-setting{padding:22rpx;background:#f4f5ee;}
+.slot-board{padding:22rpx;}
+.slot-board>.row{align-items:flex-start;}
+.slot-board>.row>.badge{margin-top:8rpx;}
+.slot-board .muted{font-size:21rpx;}
+@media (max-width:375px){
+  .top-nav button{font-size:22rpx;}
+  .finance-metrics text:first-child{font-size:24rpx;}
+  .pay-breakdown{grid-template-columns:1fr;gap:8rpx;}
+  .slot-board>.row{display:block;}
+  .slot-board>.row>.badge{margin-top:12rpx;}
+}
+
+.coach-detail-sheet .sheet-content{display:flex;flex-direction:column;gap:0;padding:24rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));}
+.coach-detail-sheet .member-profile-section{order:1;}
+.coach-detail-sheet .coach-pay-setting{order:2;}
+.coach-detail-sheet .member-account-section{order:3;border-top:1rpx solid #e5e7dd;margin-top:18rpx;}
+.coach-detail-sheet .member-history-section{order:4;}
+.coach-detail-sheet .section{font-size:25rpx;margin:20rpx 0 12rpx;}
+.coach-detail-sheet .muted{font-size:21rpx;line-height:1.6;}
+.coach-detail-sheet .member-profile-form{display:grid;grid-template-columns:1fr 1fr;gap:0 16rpx;align-items:end;}
+.coach-detail-sheet .profile-field{min-width:0;}
+.coach-detail-sheet input{height:72rpx;font-size:24rpx;padding:0 16rpx;margin:6rpx 0 12rpx;}
+.coach-detail-sheet .picker{min-height:72rpx;padding:18rpx 14rpx;font-size:23rpx;margin:6rpx 0 12rpx;}
+.coach-detail-sheet button{font-size:23rpx;padding:18rpx 16rpx;}
+.coach-detail-sheet .save-member{margin:6rpx 0 12rpx;min-height:72rpx;padding:18rpx 12rpx;}
+.coach-detail-sheet .member-profile-section>button{background:transparent;color:#7c6654;font-size:21rpx;padding:8rpx 0;margin:0;text-align:left;}
+.coach-detail-sheet .coach-pay-setting{margin:16rpx 0 0;padding:18rpx 20rpx;}
+.coach-detail-sheet .coach-pay-setting .section{margin:0 0 6rpx;}
+.coach-detail-sheet .segments{margin:12rpx 0;}
+.coach-detail-sheet .notice{font-size:21rpx;line-height:1.7;padding:16rpx;margin:12rpx 0;}
+.coach-detail-sheet .coach-pay-setting .notice{background:transparent;padding:0;margin:8rpx 0 0;}
+.coach-detail-sheet .empty{padding:22rpx 18rpx;margin:12rpx 0;font-size:22rpx;}
+.coach-detail-sheet .card,.coach-detail-sheet .pack{padding:20rpx;margin:12rpx 0;}

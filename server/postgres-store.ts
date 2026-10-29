@@ -28,6 +28,10 @@ export class PostgresStore implements Store {
         await client.query("SET LOCAL statement_timeout = '15s'");
         await client.query("SET LOCAL idle_in_transaction_session_timeout = '15s'");
         const tx: Tx = {
+          migrationRecords: async () => ({
+            packages: (await client.query('SELECT data FROM public."ez_memberPackages"')).rows.map(row => record<'memberPackages'>(row.data)),
+            bookings: (await client.query('SELECT data FROM public.ez_bookings')).rows.map(row => record<'bookings'>(row.data)),
+          }),
           hasCoachWork: async (coachId, now) => {
             const result = await client.query(`SELECT EXISTS (
               SELECT 1 FROM public.ez_sessions s WHERE s.data->>'coachId' = $1 AND
@@ -61,6 +65,13 @@ export class PostgresStore implements Store {
       }
       if (retry) await delay(Math.min(100, 5 * 2 ** attempt) + Math.floor(Math.random() * 20));
     }
+  }
+  async dueNotifications(now: number, limit: number) {
+    if (!Number.isSafeInteger(now) || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid notification query');
+    const result = await this.pool.query(`SELECT data FROM public.ez_inbox WHERE (data->'notification'->>'dueAt')::bigint <= $1
+      AND (data->'notification'->>'state' = 'pending' OR (data->'notification'->>'state' = 'sending' AND (data->'notification'->>'updatedAt')::bigint < $1 - 60000))
+      ORDER BY (data->'notification'->>'dueAt')::bigint, id LIMIT $2`, [now, limit]);
+    return result.rows.map(row => record<'inbox'>(row.data));
   }
   async list<K extends Table>(table: K, filter: Partial<Tables[K]>, limit: number): Promise<Tables[K][]> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid query limit');

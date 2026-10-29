@@ -25,12 +25,14 @@ export class CloudStore implements Store {
   constructor(private db: CloudDatabase) {}
   transaction<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
     return this.db.runTransaction(async transaction => work({
+      migrationRecords: async () => { throw new Error('Migration requires PostgreSQL'); },
       // Legacy NoSQL adapter cannot provide a serializable cross-collection check.
       hasCoachWork: async () => { throw new BusinessError('UNSUPPORTED', '当前存储不支持安全取消教练身份，请使用 PostgreSQL 环境'); },
       get: async <K extends Table>(table: K, id: string) => document<K>(checked(await transaction.collection(table).doc(id).get()).data),
       put: async <K extends Table>(table: K, value: Tables[K]) => { checked(await transaction.collection(table).doc(value.id).set(value)); },
     }), 3);
   }
+  async dueNotifications(_now: number, _limit: number): Promise<Tables['inbox'][]> { throw new Error('Notification scheduler requires PostgreSQL'); }
   async list<K extends Table>(table: K, filter: Partial<Tables[K]>, limit: number): Promise<Tables[K][]> {
     const result = checked(await this.db.collection(table).where(filter).limit(limit).get());
     if (!Array.isArray(result.data)) throw new Error('Invalid query result');

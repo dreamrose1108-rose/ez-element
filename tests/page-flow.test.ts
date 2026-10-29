@@ -11,10 +11,12 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
     for (const [n, roles] of [['student', ['student']], ['coach', ['coach']], ['admin', ['admin']]] as const) await tx.put('users', { id: userKey(n), name: n, phone: '13800000000', roles: [...roles], status: 'active' });
   });
   await service.execute('admin', { action: 'purchase', requestId: 'test-purchase', memberId: userKey('student'), kind: 'private', coachIds: [userKey('coach')], credits: 10, expiresAt: Date.now() + 90 * 86400000, amountFen: 10000, method: 'cash', note: 'test' });
+  await service.execute('admin', { action: 'migrateLegacy', requestId: 'page-migrate-legacy' });
   interface PageHarness { data: Record<string, unknown>; setData(value: object): void; refresh(): Promise<void>; copyWeek(): Promise<void>; editSlot(e: object): void; saveSlot(e: object): Promise<void>; cancelSession(e: object): Promise<void>; chooseScheduleDate(e: object): void; renderData(): void; startScheduleDrag(e: object): void; tapScheduleSlot(e: object): void; moveScheduleDrag(e: object): void; endScheduleDrag(): Promise<void>; selectSession(e: object): void; confirmBook(): void; mutate(command: object, success: string): Promise<void> }
   let page: PageHarness | undefined;
   let confirmModal = true;
   let actionSheetIndex = 0;
+  let actionSheetItems: string[] = [];
   let scrollTop = -1;
   const buildResult = await build({
     entryPoints: ['miniprogram/pages/workspace/index.ts'], bundle: true, write: false,
@@ -30,12 +32,12 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   vm.runInNewContext(bundle, {
     console, module: { exports: {} }, exports: {},
     Page(p: PageHarness) { page = p; p.setData = value => Object.assign(p.data, value); },
-    wx: { pageScrollTo(options: { scrollTop: number }) { scrollTop = options.scrollTop; }, showToast() {}, showActionSheet: async () => ({ tapIndex: actionSheetIndex }), showModal: async () => ({ confirm: confirmModal, content: '场地维护测试' }), createSelectorQuery() { const query = { selectAll() { return query; }, boundingClientRect(callback: (rects: object[]) => void) { callback(Array.from({ length: 196 }, (_, i) => ({ top: Math.floor(i / 28) * 50, bottom: Math.floor(i / 28) * 50 + 48, left: (i % 28) * 50, right: (i % 28) * 50 + 48, dataset: { index: i } }))); return query; }, exec() {} }; return query; }, request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
+    wx: { pageScrollTo(options: { scrollTop: number }) { scrollTop = options.scrollTop; }, showToast() {}, showActionSheet: async (options: { itemList: string[] }) => { actionSheetItems = options.itemList; return { tapIndex: actionSheetIndex }; }, showModal: async () => ({ confirm: confirmModal, content: '场地维护测试' }), createSelectorQuery() { const query = { selectAll() { return query; }, boundingClientRect(callback: (rects: object[]) => void) { callback(Array.from({ length: 196 }, (_, i) => ({ top: Math.floor(i / 28) * 50, bottom: Math.floor(i / 28) * 50 + 48, left: (i % 28) * 50, right: (i % 28) * 50 + 48, dataset: { index: i } }))); return query; }, exec() {} }; return query; }, request(opts: { data: { role: string; command: object }; success(r: object): void; fail(): void }) {
       service.execute(opts.data.role, opts.data.command).then(data => opts.success({ statusCode: 200, data: { ok: true, data } }), e => opts.success({ statusCode: 200, data: { ok: false, message: e.message } }));
     } },
   });
   assert.ok(page); const p = page;
-  const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void; chooseMemberBirthday(e: object): void; updateMember(e: object): Promise<void>; updateCoachPay(e: object): Promise<void> };
+  const memberPage = p as PageHarness & { searchMembers(e: object): void; filterMembers(e: object): void; openMember(e: object): void; closeMember(): void; editMemberName(e: object): void; editMemberPhone(e: object): void; chooseMemberBirthday(e: object): void; updateMember(e: object): Promise<void>; updateCoachPay(e: object): Promise<void> };
   p.setData({ role: 'admin' }); await p.refresh();
   const finance = p.data.adminFinance as { todayRevenueLabel: string; todayCoachPayLabel: string; todayAfterCoachPayLabel: string; coaches: { name: string; monthEstimatedTotalLabel: string }[] };
   assert.equal(finance.todayRevenueLabel, '¥100.00'); assert.equal(finance.todayCoachPayLabel, '¥0.00'); assert.equal(finance.todayAfterCoachPayLabel, '¥100.00');
@@ -48,10 +50,15 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   assert.equal((p.data.filteredMembers as object[]).length, 1);
   memberPage.openMember({ currentTarget: { dataset: { id: userKey('student') } } });
   assert.equal((p.data.memberDetail as { id: string }).id, userKey('student'));
-  assert.equal((p.data.memberPacks as object[]).length, 1);
-  assert.deepEqual((p.data.memberPacks as { unitPriceLabel: string; totalAmountLabel: string; total: number }[]).map(pack => [pack.unitPriceLabel, pack.totalAmountLabel, pack.total]), [['¥10.00', '¥100.00', 10]]);
+  assert.equal((p.data.memberPacks as object[]).length, 0);
+  assert.equal((p.data.memberWallet as { available: string }).available, '¥100.00');
+  // Choosing a birthday re-renders the bound inputs; their current edits must survive.
+  memberPage.editMemberName({ detail: { value: '学员新名' } });
+  memberPage.editMemberPhone({ detail: { value: '13900000000' } });
   memberPage.chooseMemberBirthday({ detail: { value: '1996-06-18' } });
-  await memberPage.updateMember({ detail: { value: { name: '学员新名', phone: '13900000000' } } });
+  const draft = p.data.memberDetail as { name: string; phone: string };
+  assert.equal(draft.name, '学员新名'); assert.equal(draft.phone, '13900000000');
+  await memberPage.updateMember({ detail: { value: { name: draft.name, phone: draft.phone } } });
   const updatedMember = await store.transaction(tx => tx.get('users', userKey('student')));
   assert.equal(updatedMember?.name, '学员新名'); assert.equal(updatedMember?.phone, '13900000000'); assert.equal(updatedMember?.birthday, '1996-06-18');
   memberPage.filterMembers({ currentTarget: { dataset: { filter: 'coach' } } });
@@ -113,17 +120,26 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   assert.equal(slots.length, 1); assert.equal(slots[0]?.startLabel, '09:30');
   const sid = slots[0]!.id; p.selectSession({ currentTarget: { dataset: { id: sid } } });
   p.confirmBook(); await idle();
-  assert.equal(p.data.error, ''); assert.equal(p.data.totalFrozen, 1); assert.equal(p.data.totalAvailable, 9);
+  assert.equal(p.data.error, ''); assert.equal((p.data.wallet as { frozen: string }).frozen, '¥10.00'); assert.equal((p.data.wallet as { available: string }).available, '¥90.00');
   const bookings = p.data.bookings as { id: string }[];
   p.setData({ role: 'coach' }); await p.refresh(); assert.equal((p.data.bookings as object[]).length, 1);
   assert.equal((p.data.bookings as { unitPriceLabel: string; settleAmountLabel: string }[])[0]?.unitPriceLabel, '¥10.00');
   assert.equal((p.data.bookings as { unitPriceLabel: string; settleAmountLabel: string }[])[0]?.settleAmountLabel, '¥10.00');
+  const coachMemberPage = p as PageHarness & { openCoachMember(e: object): void; closeMember(): void };
+  coachMemberPage.openCoachMember({ currentTarget: { dataset: { id: userKey('student') } } });
+  const coachDetail = p.data.coachMember as { name: string; records: { id: string; amount: string }[] };
+  assert.equal(coachDetail.name, '学员新名'); assert.equal(coachDetail.records.length, 1);
+  assert.equal(coachDetail.records[0]?.id, bookings[0]!.id); assert.equal(coachDetail.records[0]?.amount, '¥10.00');
+  assert.equal('phone' in coachDetail, false);
+  coachMemberPage.closeMember(); assert.equal(p.data.coachMember, null);
+  coachMemberPage.openCoachMember({ currentTarget: { dataset: { id: 'not-in-roster' } } });
+  assert.equal(p.data.coachMember, null);
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:30')?.state, 'booked');
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '10:00')?.state, 'booked');
   assert.equal((p.data.scheduleSlots as { startLabel: string; state: string }[]).find(item => item.startLabel === '09:00')?.state, 'free');
   p.setData({ role: 'student' }); await p.refresh();
   await p.mutate({ action: 'cancel', bookingId: bookings[0]!.id }, '已取消');
-  assert.equal(p.data.totalFrozen, 0); assert.equal(p.data.totalAvailable, 10);
+  assert.equal((p.data.wallet as { frozen: string }).frozen, '¥0.00'); assert.equal((p.data.wallet as { available: string }).available, '¥100.00');
   p.setData({ role: 'coach' }); await p.refresh();
   assert.equal(p.data.copyCount, 1);
   await p.copyWeek(); assert.equal(p.data.error, '');
@@ -132,7 +148,10 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   slots = p.data.sessions as { id: string; startLabel: string }[];
   assert.equal(slots.length, 1); assert.equal(slots[0]!.startLabel, '09:30');
   assert.notEqual(slots[0]!.id, sid);
-  p.editSlot({ currentTarget: { dataset: { id: slots[0]!.id } } });
+  actionSheetIndex = 2;
+  const editCell = (p.data.scheduleSlots as { sessionId: string; index: number }[]).find(item => item.sessionId === slots[0]!.id)!;
+  p.startScheduleDrag({ currentTarget: { dataset: { index: editCell.index } } }); await p.endScheduleDrag();
+  actionSheetIndex = 0;
   assert.ok(p.data.editing);
   await p.saveSlot({ detail: { value: { title: '修改后私教', room: '新训练区' } } });
   assert.equal(p.data.error, ''); assert.equal(p.data.editing, null);
@@ -142,13 +161,56 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   await p.copyWeek(); assert.equal(p.data.error, '');
   p.setData({ role: 'student', day }); await p.refresh();
   p.selectSession({ currentTarget: { dataset: { id: sid } } }); p.confirmBook(); await idle();
-  assert.equal(p.data.totalFrozen, 1);
+  assert.equal((p.data.wallet as { frozen: string }).frozen, '¥10.00');
   p.setData({ role: 'admin' }); await p.refresh();
-  await p.cancelSession({ currentTarget: { dataset: { id: sid } } });
+  actionSheetIndex = 1;
+  const bookedCell = (p.data.scheduleSlots as { sessionId: string; index: number }[]).find(item => item.sessionId === sid)!;
+  p.startScheduleDrag({ currentTarget: { dataset: { index: bookedCell.index } } }); await p.endScheduleDrag();
+  assert.equal(actionSheetItems.length, 2);
+  actionSheetIndex = 0;
   assert.equal(p.data.error, '');
   p.setData({ role: 'student' }); await p.refresh();
-  assert.equal(p.data.totalFrozen, 0); assert.equal(p.data.totalAvailable, 10);
+  assert.equal((p.data.wallet as { frozen: string }).frozen, '¥0.00'); assert.equal((p.data.wallet as { available: string }).available, '¥100.00');
   const cancelled = p.data.bookings as { statusName: string; cancelReason: string }[];
   assert.ok(cancelled.some(b => b.statusName === '门店停课' && b.cancelReason === '场地维护测试'));
   assert.ok(cancelled.some(b => b.statusName === '已取消' && !b.cancelReason), '原来的学员自行取消记录不应被改写');
+
+  // New recharges are money, independent of both legacy packs and course type.
+  p.setData({ role: 'admin' }); await p.refresh();
+  const rechargePage = p as PageHarness & { purchase(): void };
+  p.setData({ memberIndex: (p.data.users as { id: string }[]).findIndex(u => u.id === userKey('student')), purchaseExpiry: '2099-12-31' });
+  p.setData({ purchaseAmount: '4500.01', privatePrice: '220', groupPrice: '100', purchaseNote: '' });
+  rechargePage.purchase();
+  assert.match(String(p.data.error), /备注/);
+  assert.equal(p.data.errorScope, 'recharge');
+  p.setData({ purchaseNote: 'wallet test' });
+  rechargePage.purchase(); await idle();
+  assert.equal(p.data.error, '');
+  p.setData({ role: 'student' }); await p.refresh();
+  assert.equal((p.data.wallet as { available: string }).available, '¥4600.01');
+  assert.equal(p.data.totalAvailable, 0, '储值金额不得混入旧课时数量');
+  const group = await service.execute('admin', { action: 'publish', requestId: 'page-wallet-group', kind: 'group', title: '储值团课', coachId: userKey('coach'), roomId: 'group', exclusive: false, start: Date.parse(`${days[5]!.key}T18:00:00+08:00`), end: Date.parse(`${days[5]!.key}T19:00:00+08:00`), capacity: 10, cost: 1 }) as { id: string };
+  await p.refresh(); p.selectSession({ currentTarget: { dataset: { id: group.id } } });
+  const options = p.data.eligible as { id: string; freezeLabel: string }[];
+  assert.equal(options.length, 1); assert.equal(options[0]?.freezeLabel, '¥100.00');
+  p.confirmBook(); await idle(); assert.equal(p.data.error, '');
+  assert.equal((p.data.wallet as { available: string }).available, '¥4500.01');
+  assert.equal((p.data.wallet as { frozen: string }).frozen, '¥100.00');
+  p.setData({ role: 'admin', copySourceDay: targetDay, copyDestinationDay: new Date(Date.parse(`${targetDay}T12:00:00+08:00`) + 3 * 86400000).toISOString().slice(0, 10) });
+  const copySource = (await store.list('sessions', {}, 200)).find(s => s.status === 'open' && s.start === Date.parse(`${targetDay}T09:30:00+08:00`))!;
+  const legacy = { ...copySource, id: 'legacy-119-minute-slot', start: copySource.start + 4 * 3600000, end: copySource.start + 4 * 3600000 + 119 * 60000 };
+  await store.transaction(tx => tx.put('sessions', legacy));
+  await p.refresh();
+  assert.equal(p.data.copyDayCount, 1);
+  assert.match(String(p.data.copyDayWarning), /跳过 1 个/);
+  assert.match(String(p.data.copyDayWarning), /13:30–15:29/);
+  const beforeCopyDay = (await store.list('sessions', {}, 200)).length;
+  await (p as PageHarness & { copyDay(): Promise<void> }).copyDay();
+  assert.equal(p.data.error, '');
+  assert.equal((await store.list('sessions', {}, 200)).length, beforeCopyDay + 1);
+  assert.deepEqual(await store.transaction(tx => tx.get('sessions', legacy.id)), legacy);
+  await p.mutate({ action: 'approve', userId: 'missing-member' }, 'unused');
+  assert.ok(p.data.error);
+  assert.equal(p.data.errorScope, 'approve', 'refresh must preserve failed operation location');
+  assert.equal(p.data.errorId, 'missing-member');
 });

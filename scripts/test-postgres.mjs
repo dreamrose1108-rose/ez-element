@@ -39,7 +39,7 @@ try {
   }
   console.log('Isolated PostgreSQL ready; running business + SQL permission/concurrency tests.');
   const base = `127.0.0.1:${port}/${database}`;
-  const child = spawn(process.execPath, ['--import', 'tsx', '--test', '--test-concurrency=1', 'tests/business.test.ts', 'tests/postgres.integration.ts'], {
+  const child = spawn(process.execPath, ['--import', 'tsx', '--test', '--test-concurrency=1', 'tests/business.test.ts', 'tests/wallet.test.ts', 'tests/postgres.integration.ts'], {
     stdio: 'inherit', env: { ...process.env, EZ_PG_TEST_RUN: '1',
       EZ_TEST_PG_URL: `postgresql://ez_api:${password}@${base}`,
       EZ_TEST_PG_ADMIN_URL: `postgresql://postgres:${password}@${base}`,

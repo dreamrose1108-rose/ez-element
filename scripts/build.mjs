@@ -9,7 +9,7 @@ for (const path of ['app', 'pages/workspace/index']) await build({ entryPoints: 
 const root = JSON.parse(await readFile('package.json', 'utf8'));
 for (const [name, entry, dependencies] of [
   ['api', 'server/entry.ts', root.dependencies],
-  ['getLoginTicket', 'server/login-entry.ts', { '@cloudbase/node-sdk': root.dependencies['@cloudbase/node-sdk'], zod: root.dependencies.zod }],
+  ['getLoginTicket', 'server/login-entry.ts', root.dependencies],
 ]) {
   await mkdir(`cloudfunctions/${name}`, { recursive: true });
   await build({ entryPoints: [entry], outfile: `cloudfunctions/${name}/index.js`, platform: 'node', target: 'node18', format: 'cjs', bundle: true, packages: 'external' });

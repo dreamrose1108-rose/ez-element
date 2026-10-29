@@ -53,6 +53,16 @@ test('business API rejects missing/anonymous/wrong-source identity before openin
   }
   assert.equal(opened, false);
 });
+
+test('invalid recharge identifies missing receipt note without echoing submitted data', async () => {
+  const api = apiHandler(() => ({ uid: 'platform-a', customUserId: wechatIdentity(settings.appid, 'a'), isAnonymous: false }), () => new MemoryStore());
+  const response = await api({ action: 'recharge', requestId: 'invalid-recharge', memberId: 'student', amountFen: 500000, prices: { private: 30000, group: 10000 }, expiresAt: Date.now() + 86400000, method: 'transfer', note: '' });
+  assert.ok(!response.ok && typeof response.message === 'string');
+  assert.match(response.message, /备注/);
+  const unsupported = await api({ action: 'secret-test-value' });
+  assert.ok(!unsupported.ok && typeof unsupported.message === 'string');
+  assert.match(unsupported.message, /版本已同步/); assert.ok(!unsupported.message.includes('secret-test-value'));
+});
 test('warm API invocations re-read trusted identity; client cannot register as admin or another user', async () => {
   const store = new MemoryStore();
   const first = wechatIdentity(settings.appid, 'a'); const second = wechatIdentity(settings.appid, 'b');

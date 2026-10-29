@@ -9,6 +9,7 @@ export class MemoryStore implements Store {
     const run = this.queue.then(async () => {
       const draft = structuredClone(this.docs);
       const tx: Tx = {
+        migrationRecords: async () => ({ packages: [...draft.entries()].filter(([k]) => k.startsWith('memberPackages/')).map(([,v]) => structuredClone(v) as Tables['memberPackages']), bookings: [...draft.entries()].filter(([k]) => k.startsWith('bookings/')).map(([,v]) => structuredClone(v) as Tables['bookings']) }),
         hasCoachWork: async (coachId, now) => {
           const sessions = [...draft.entries()].filter(([k]) => k.startsWith('sessions/')).map(([, v]) => v as Tables['sessions']).filter(s => s.coachId === coachId);
           return sessions.some(s => (s.status === 'open' || s.status === 'rest') && s.end > now) || [...draft.entries()].some(([k, v]) => k.startsWith('bookings/') && (v as Tables['bookings']).status === 'confirmed' && sessions.some(s => s.id === (v as Tables['bookings']).sessionId));
@@ -22,6 +23,12 @@ export class MemoryStore implements Store {
     });
     this.queue = run.then(() => undefined, () => undefined);
     return run;
+  }
+  async dueNotifications(now: number, limit: number) {
+    await this.queue;
+    return [...this.docs.entries()].filter(([k]) => k.startsWith('inbox/')).map(([, v]) => structuredClone(v) as Tables['inbox'])
+      .filter(n => n.notification && n.notification.dueAt <= now && (n.notification.state === 'pending' || (n.notification.state === 'sending' && n.notification.updatedAt < now - 60000)))
+      .sort((a, b) => a.notification!.dueAt - b.notification!.dueAt).slice(0, limit);
   }
   async list<K extends Table>(table: K, filter: Partial<Tables[K]>, limit: number): Promise<Tables[K][]> {
     await this.queue;

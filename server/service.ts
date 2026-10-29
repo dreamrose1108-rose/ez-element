@@ -1,8 +1,12 @@
+import { migrateLegacy } from './legacy-migration';
+import { queueBookingNotification } from './booking-notification';
 import { createHash } from 'node:crypto';
-import { Booking, Command, Ledger, Package, Role, Rules, Session, Store, Tx, User, commandSchema, dayKey, overlaps, requireThat } from './model';
+import { Booking, Command, Ledger, Package, Role, Rules, Session, Store, Tx, User, commandSchema, dayKey, overlaps, requireThat, publicUser } from './model';
 
 export const key = (...parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 32);
 export const userKey = (openid: string) => key('wechat', openid);
+export const walletKey = (memberId: string) => key('wallet', memberId);
+const bookingDebit = (b: Booking) => b.amountFen ?? b.cost;
 export const defaultRules: Rules = { id: 'store', bookingDays: 14, privateCancelHours: 12, groupCancelHours: 2, cutoffMinutes: 60 };
 const hasRole = (u: User, role: Role) => u.roles.includes(role);
 const role = (u: User, r: Role) => requireThat(hasRole(u, r), 'FORBIDDEN', '没有操作权限');
@@ -31,12 +35,15 @@ async function schedule(tx: Tx, owner: string, s: Session, ref: string, add: boo
 }
 async function ledger(tx: Tx, p: Package, actorId: string, type: Ledger['type'], reference: string, now: number, available: number, frozen: number, consumed: number) {
   p.available += available; p.frozen += frozen; p.consumed += consumed;
-  requireThat(p.available >= 0 && p.frozen >= 0 && p.consumed >= 0 && p.available + p.frozen + p.consumed === p.total, 'BALANCE', '课时余额校验失败');
+  requireThat([p.available, p.frozen, p.consumed, p.total].every(Number.isSafeInteger) && p.available >= 0 && p.frozen >= 0 && p.consumed >= 0 && p.available + p.frozen + p.consumed === p.total, 'BALANCE', '账户余额校验失败');
   await tx.put('memberPackages', p);
-  await tx.put('creditLedger', { id: key(reference, type), packageId: p.id, memberId: p.memberId, actorId, type, reference, delta: { available, frozen, consumed }, at: now });
+  await tx.put('creditLedger', { id: key(reference, type), packageId: p.id, memberId: p.memberId, actorId, type, reference, ...(p.kind === 'wallet' ? { unit: 'fen' as const } : {}), delta: { available, frozen, consumed }, at: now });
 }
 async function notify(tx: Tx, booking: Booking, s: Session, title: string, now: number) {
+  if (booking.status === 'confirmed') await queueBookingNotification(tx, booking, s, 'booked', now);
+  if (booking.status === 'cancelled') await queueBookingNotification(tx, booking, s, 'cancelled', now, booking.cancelReason || s.cancelReason);
   for (const userId of [...new Set([booking.memberId, s.coachId])]) {
+    if (userId === booking.memberId && ['confirmed', 'cancelled'].includes(booking.status)) continue;
     await tx.put('inbox', { id: key(booking.id, title, userId), userId, title: `${title} · ${s.title}`, bookingId: booking.id, at: now });
   }
 }
@@ -65,6 +72,7 @@ export class GymService {
     const todayClassCommissionFen = Math.round(todayClassRevenueFen * classCommissionBps / 10000);
     const monthPurchases = (await this.store.list('purchaseRecords', {}, 1000)).filter(p => dayKey(p.at).startsWith(month));
     const performanceShares = await Promise.all(monthPurchases.map(async purchase => {
+      if (purchase.salesCoachId) return { amount: purchase.salesCoachId === coach.id ? purchase.amountFen : 0, today: dayKey(purchase.at) === today };
       const [pack] = await this.store.list('memberPackages', { id: purchase.packageId }, 1);
       if (!pack?.coachIds.includes(coach.id)) return { amount: 0, today: false };
       const share = Math.round(purchase.amountFen / Math.max(1, pack.coachIds.length));
@@ -125,6 +133,25 @@ export class GymService {
     });
   }
   private async mutate(tx: Tx, actor: User, cmd: Exclude<Command, { action: 'register' | 'dashboard' }>, operation: string, now: number, rules: Rules, cancellationIds: string[] = []): Promise<{ id: string }> {
+    if (cmd.action === 'migrateLegacy') return migrateLegacy(tx, actor, rules, now);
+    if (cmd.action === 'setMemberPrices') {
+      role(actor, 'admin'); const member = await user(tx, cmd.userId); role(member, 'student');
+      member.prices = cmd.prices; await tx.put('users', member); return { id: member.id };
+    }
+    if (cmd.action === 'recharge') {
+      role(actor, 'admin'); const member = await user(tx, cmd.memberId); role(member, 'student');
+      requireThat(cmd.expiresAt > now, 'EXPIRED', '有效期必须晚于当前时间');
+      if (cmd.salesCoachId) role(await user(tx, cmd.salesCoachId), 'coach');
+      const id = walletKey(member.id);
+      const wallet = await tx.get('memberPackages', id) || { id, memberId: member.id, kind: 'wallet' as const, coachIds: [], available: 0, frozen: 0, consumed: 0, total: 0, expiresAt: cmd.expiresAt };
+      requireThat(wallet.kind === 'wallet' && wallet.memberId === member.id, 'DATA_INTEGRITY', '储值账户异常');
+      wallet.total += cmd.amountFen;
+      wallet.expiresAt = Math.max(wallet.expiresAt, cmd.expiresAt);
+      await ledger(tx, wallet, actor.id, 'purchase', operation, now, cmd.amountFen, 0, 0);
+      member.prices = cmd.prices; await tx.put('users', member);
+      await tx.put('purchaseRecords', { id: operation, memberId: member.id, packageId: id, amountFen: cmd.amountFen, method: cmd.method, note: cmd.note, actorId: actor.id, at: now, ...(cmd.salesCoachId ? { salesCoachId: cmd.salesCoachId } : {}) });
+      return { id };
+    }
     if (cmd.action === 'updateCoachPay') {
       role(actor, 'admin');
       const target = await user(tx, cmd.userId); role(target, 'coach');
@@ -158,6 +185,7 @@ export class GymService {
       target.status = 'active'; await tx.put('users', target); return { id: target.id };
     }
     if (cmd.action === 'purchase') {
+      requireThat(!rules.walletOnly, 'RETIRED', '旧课包已停用，请使用通用余额充值');
       role(actor, 'admin'); const member = await user(tx, cmd.memberId); role(member, 'student');
       requireThat(cmd.expiresAt > now, 'EXPIRED', '课包有效期必须在未来');
       requireThat(cmd.kind === 'group' ? cmd.coachIds.length === 0 : cmd.coachIds.length > 0, 'SCOPE', '私教课包必须指定教练，团课课包不绑定教练');
@@ -230,23 +258,28 @@ export class GymService {
         title: cmd.title, roomId: cmd.roomId, start: cmd.start, end: cmd.end, capacity: cmd.capacity,
       }, operation, now, rules);
     }
-    if (cmd.action === 'copyWeek') {
+    if (cmd.action === 'copyWeek' || cmd.action === 'copyDay') {
       requireThat(hasRole(actor, 'admin') || hasRole(actor, 'coach'), 'FORBIDDEN', '仅教练或管理员可复制排班');
       requireThat(new Set(cmd.sessionIds).size === cmd.sessionIds.length, 'INPUT', '复制列表包含重复时段');
       requireThat(cmd.sourceStart === Date.parse(`${dayKey(cmd.sourceStart)}T00:00:00+08:00`), 'TIME', '请选择有效的起始日期');
       const week = 7 * 86400000;
+      const span = cmd.action === 'copyDay' ? 86400000 : week;
+      const offset = cmd.action === 'copyDay' ? cmd.targetStart - cmd.sourceStart : week;
+      if (cmd.action === 'copyDay') {
+        requireThat(cmd.targetStart === Date.parse(`${dayKey(cmd.targetStart)}T00:00:00+08:00`) && offset !== 0, 'TIME', '请选择与来源不同的目标日期');
+      }
       let coachId = '';
       for (const id of cmd.sessionIds) {
         const source = await tx.get('sessions', id);
         requireThat(source && source.status === 'open' && source.kind === 'private', 'STATE', '只能复制开放的私教时段');
-        requireThat(source.start >= cmd.sourceStart && source.start < cmd.sourceStart + week, 'TIME', '来源时段必须在所选七天内');
+        requireThat(source.start >= cmd.sourceStart && source.start < cmd.sourceStart + span, 'TIME', cmd.action === 'copyDay' ? '来源时段必须在所选当天内' : '来源时段必须在所选七天内');
         requireThat(!coachId || coachId === source.coachId, 'SCOPE', '每次只能复制一位教练的排班');
         coachId = source.coachId;
         // Reuse publish authorization and schedule locks inside this same transaction.
         // A conflict anywhere rolls back the entire batch; reservations are never copied.
         await this.mutate(tx, actor, { action: 'publish', requestId: cmd.requestId,
           kind: source.kind, title: source.title, coachId, roomId: source.roomId,
-          exclusive: source.exclusive, start: source.start + week, end: source.end + week,
+          exclusive: source.exclusive, start: source.start + offset, end: source.end + offset,
           capacity: source.capacity, cost: source.cost,
         }, key(operation, source.id), now, rules);
       }
@@ -269,7 +302,7 @@ export class GymService {
         const p = await tx.get('memberPackages', b.packageId);
         requireThat(p && p.memberId === b.memberId, 'DATA_INTEGRITY', '课包记录异常，停课未执行，请联系管理员');
         await schedule(tx, `member:${b.memberId}`, s, b.id, false);
-        await ledger(tx, p, actor.id, 'release', b.id, now, b.cost, -b.cost, 0);
+        await ledger(tx, p, actor.id, 'release', b.id, now, bookingDebit(b), -bookingDebit(b), 0);
         b.status = 'cancelled'; b.cancelReason = cmd.reason; await tx.put('bookings', b);
         await notify(tx, b, s, `门店停课：${cmd.reason}`, now);
       }
@@ -291,17 +324,22 @@ export class GymService {
       role(actor, 'student');
       const s = await tx.get('sessions', cmd.sessionId);
       const p = await tx.get('memberPackages', cmd.packageId);
+      requireThat(!p?.migratedAt && (!rules.walletOnly || p?.kind === 'wallet'), 'RETIRED', '旧课包已转为余额，请刷新后使用通用余额预约');
       requireThat(s && s.status === 'open', 'NOT_FOUND', '场次不可预约');
       const coach = await user(tx, s.coachId); role(coach, 'coach');
       requireThat(s.start - now >= s.cutoffMinutes * 60000 && s.start - now <= rules.bookingDays * 86400000, 'WINDOW', '不在可预约时间范围内');
-      requireThat(p && p.memberId === actor.id && p.kind === s.kind && (p.kind !== 'private' || p.coachIds.includes(s.coachId)), 'PACKAGE', '课包不适用于该课程');
+      requireThat(p && p.memberId === actor.id && (p.kind === 'wallet' || (p.kind === s.kind && (p.kind !== 'private' || p.coachIds.includes(s.coachId)))), 'PACKAGE', '账户或课包不适用于该课程');
       requireThat(p.expiresAt >= s.start, 'EXPIRED', '上课时间超出课包有效期');
-      requireThat(p.available >= s.cost, 'BALANCE', '可用课时不足');
+      const price = p.kind === 'wallet' ? actor.prices?.[s.kind] : undefined;
+      if (p.kind === 'wallet') requireThat(price && Number.isSafeInteger(price) && price > 0, 'PRICE', '请联系门店设置本课程的学员单价');
+      const debit = p.kind === 'wallet' ? price! * s.cost : s.cost;
+      if (p.kind === 'wallet') requireThat(cmd.expectedAmountFen === debit, 'PRICE_CHANGED', '课程价格已更新，请刷新后重新确认金额');
+      requireThat(Number.isSafeInteger(debit) && p.available >= debit, 'BALANCE', p.kind === 'wallet' ? '可用储值余额不足' : '可用课时不足');
       requireThat(s.reserved < s.capacity, 'FULL', '该场次已约满');
-      const b: Booking = { id: operation, sessionId: s.id, memberId: actor.id, packageId: p.id, cost: s.cost, cancelHours: s.cancelHours, status: 'confirmed', createdAt: now };
+      const b: Booking = { id: operation, sessionId: s.id, memberId: actor.id, packageId: p.id, cost: s.cost, ...(p.kind === 'wallet' ? { amountFen: debit, unitPriceFen: price } : {}), cancelHours: s.cancelHours, status: 'confirmed', createdAt: now };
       await schedule(tx, `member:${actor.id}`, s, b.id, true);
       s.reserved++; await tx.put('sessions', s); await tx.put('bookings', b);
-      await ledger(tx, p, actor.id, 'freeze', b.id, now, -b.cost, b.cost, 0);
+      await ledger(tx, p, actor.id, 'freeze', b.id, now, -debit, debit, 0);
       await notify(tx, b, s, '预约成功', now); return { id: b.id };
     }
     const b = await tx.get('bookings', cmd.bookingId);
@@ -316,7 +354,7 @@ export class GymService {
       requireThat(s.reserved > 0, 'DATA_INTEGRITY', '场次名额异常');
       b.status = 'cancelled'; s.reserved--;
       await schedule(tx, `member:${b.memberId}`, s, b.id, false);
-      await ledger(tx, p, actor.id, 'release', b.id, now, b.cost, -b.cost, 0);
+      await ledger(tx, p, actor.id, 'release', b.id, now, bookingDebit(b), -bookingDebit(b), 0);
       await tx.put('sessions', s); await tx.put('bookings', b);
       await notify(tx, b, s, '预约已取消', now); return { id: b.id };
     }
@@ -324,8 +362,15 @@ export class GymService {
     if (b.status === cmd.outcome) return { id: b.id };
     requireThat(b.status === 'confirmed' && s.end <= now, 'STATE', '课程结束后才能确认出勤，已结算记录需走纠错流程');
     b.status = cmd.outcome;
-    await ledger(tx, p, actor.id, 'consume', b.id, now, 0, -b.cost, b.cost);
+    await ledger(tx, p, actor.id, 'consume', b.id, now, 0, -bookingDebit(b), bookingDebit(b));
     await tx.put('bookings', b); await notify(tx, b, s, cmd.outcome === 'attended' ? '到课已消课' : '爽约已消课', now);
+    if (p.kind === 'wallet') {
+      const title = cmd.outcome === 'attended' ? '到课已消课' : '爽约已消课';
+      const receipt = { packageId: p.id, deductedFen: bookingDebit(b), remainingFen: p.available + p.frozen, frozenFen: p.frozen, consumedCredits: b.cost };
+      await tx.put('inbox', { id: key(b.id, title, b.memberId), userId: b.memberId, title: `${title} · ${s.title}`, bookingId: b.id, at: now, receipt, ...(cmd.outcome === 'attended' ? { wxDelivery: { state: 'pending' as const, updatedAt: now } } : {}),
+        detail: `本次扣费 ¥${(receipt.deductedFen / 100).toFixed(2)}；储值余额 ¥${(receipt.remainingFen / 100).toFixed(2)}（含预约冻结 ¥${(p.frozen / 100).toFixed(2)}）。按预约时锁定的学员单价结算，私教与团课共用余额。` });
+      return { id: b.id };
+    }
     // Purchase and package IDs are identical. Read the original receipt inside
     // the settlement transaction; never infer a price from dashboard lists.
     const purchase = await tx.get('purchaseRecords', p.id);
@@ -343,13 +388,13 @@ export class GymService {
       + (receipt ? `本次扣费 ¥${money(receipt.deductedFen)}，本课包剩余金额 ¥${money(receipt.remainingFen)}。金额按实收款分摊，尾差随累计消课结清。` : '历史收款记录缺失，金额暂无法核算，请联系门店。')
       + `本课包剩余 ${remainingCredits} 课时（含已预约冻结 ${p.frozen} 课时）。以上为结算时余额，非可提现余额。`;
     const title = cmd.outcome === 'attended' ? '到课已消课' : '爽约已消课';
-    await tx.put('inbox', { id: key(b.id, title, b.memberId), userId: b.memberId, title: `${title} · ${s.title}`, bookingId: b.id, at: now, detail, ...(receipt ? { receipt } : {}) });
+    await tx.put('inbox', { id: key(b.id, title, b.memberId), userId: b.memberId, title: `${title} · ${s.title}`, bookingId: b.id, at: now, detail, ...(receipt ? { receipt } : {}), ...(cmd.outcome === 'attended' ? { wxDelivery: { state: 'pending' as const, updatedAt: now } } : {}) });
     return { id: b.id };
   }
   private async dashboard(actorId: string) {
     const actor = await this.store.transaction(tx => tx.get('users', actorId));
     if (!actor) return { profile: null };
-    if (actor.status !== 'active') return { profile: actor };
+    if (actor.status !== 'active') return { profile: publicUser(actor) };
     const admin = hasRole(actor, 'admin'); const coach = hasRole(actor, 'coach');
     const sessions = await this.store.list('sessions', {}, 200);
     const ownSessions = sessions.filter(s => s.coachId === actor.id);
@@ -369,7 +414,11 @@ export class GymService {
         totalCredits: memberPackage.total,
       });
     }));
-    const pricedBookings = bookings.map(booking => {
+    const receiptNotices = coach || admin ? (await this.store.list('inbox', {}, 1000)).filter(n => n.wxDelivery) : [];
+    const deliveryByBooking = new Map(receiptNotices.map(n => [n.bookingId, n.wxDelivery!.state]));
+    const pricedBookings = bookings.map(original => {
+      const booking = { ...original, notificationState: deliveryByBooking.get(original.id) };
+      if (booking.amountFen !== undefined) return { ...booking, settleAmountFen: booking.amountFen, totalAmountFen: undefined };
       const pricing = packagePrices.get(booking.packageId); if (!pricing) return { ...booking, totalAmountFen: undefined, unitPriceFen: undefined, settleAmountFen: undefined };
       const settleAmountFen = Math.round(pricing.totalAmountFen * (pricing.consumed + booking.cost) / pricing.totalCredits) - Math.round(pricing.totalAmountFen * pricing.consumed / pricing.totalCredits);
       return { ...booking, totalAmountFen: pricing.totalAmountFen, unitPriceFen: pricing.unitPriceFen, settleAmountFen };
@@ -412,13 +461,13 @@ export class GymService {
       };
     }
     return {
-      profile: actor,
+      profile: publicUser(actor),
       sessions: sessions.filter(s => admin || (coach && s.coachId === actor.id) || bookings.some(b => b.sessionId === s.id) || (s.status === 'open' && s.start >= this.clock())),
-      packages: await this.store.list('memberPackages', admin ? {} : { memberId: actor.id }, 200),
+      packages: (await this.store.list('memberPackages', admin ? {} : { memberId: actor.id }, 200)).filter(p => !p.migratedAt),
       bookings: pricedBookings,
-      inbox: await this.store.list('inbox', { userId: actor.id }, 200),
+      inbox: (await this.store.list('inbox', { userId: actor.id }, 200)).filter(n => n.notification?.kind !== 'reminder' || n.notification.state === 'sent'),
       ledger: await this.store.list('creditLedger', admin ? {} : { memberId: actor.id }, 200),
-      users,
+      users: users.map(publicUser),
       roster,
       coaches: (await this.store.list('users', { status: 'active' }, 200)).filter(u => hasRole(u, 'coach')).map(u => ({ id: u.id, name: u.name })),
       coachPay,

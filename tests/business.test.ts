@@ -147,7 +147,7 @@ test('购课 → 预约 → 取消 → 重新预约 → 出勤；幂等且账目
   const ledger = await f.store.list('creditLedger', { packageId: p.id }, 200);
   const sums = ledger.reduce((a, l) => [a[0]! + l.delta.available, a[1]! + l.delta.frozen, a[2]! + l.delta.consumed], [0, 0, 0]);
   assert.deepEqual(sums, [9, 0, 1]);
-  assert.equal((await f.store.list('inbox', { userId: userKey('student') }, 200)).length, 4);
+  assert.equal((await f.store.list('inbox', { userId: userKey('student') }, 200)).filter(n => n.notification?.kind !== 'reminder').length, 4);
 });
 
 test('11 人并发抢 10 人团课，失败者不冻结课时', async () => {
@@ -253,6 +253,43 @@ test('教练只获得预约所需价格摘要，不包含收款记录和他人�
   assert.equal(result.bookings[0]?.unitPriceFen, 20000);
   assert.equal(result.bookings[0]?.settleAmountFen, 20000);
   assert.equal(result.bookings[0]?.totalAmountFen, 200000);
+});
+
+test('按天复制保留时刻和属性、不复制预约，支持任意目标日期并保持幂等', async () => {
+  const f = await fixture(); const pack = await f.purchase();
+  const a = await f.publish({ cost: 2 });
+  await f.call('student', 'book', { sessionId: a.id, packageId: pack.id });
+  const sourceStart = Date.parse('2026-11-03T00:00:00+08:00');
+  const targetStart = Date.parse('2026-11-06T00:00:00+08:00');
+  const command = { action: 'copyDay', requestId: 'copy-day-once', sessionIds: [a.id], sourceStart, targetStart };
+  await f.service.execute('coach', command); await f.service.execute('coach', command);
+  const sessions = await f.get('sessions'); assert.equal(sessions.length, 2);
+  const original = sessions.find(s => s.id === a.id)!;
+  const copy = sessions.find(s => s.id !== a.id)!;
+  assert.equal(copy.start, original.start + targetStart - sourceStart);
+  assert.equal(copy.end, original.end + targetStart - sourceStart);
+  assert.equal(copy.reserved, 0); assert.equal(copy.cost, 2); assert.equal(copy.coachId, original.coachId);
+  assert.equal((await f.get('bookings')).length, 1);
+  assert.equal((await f.get('memberPackages'))[0]!.frozen, 2);
+  await f.call('admin', 'copyDay', { ...command, requestId: 'earlier-day', targetStart: sourceStart - 86400000 });
+  assert.equal((await f.get('sessions')).length, 3);
+});
+
+test('按天复制拒绝越权、跨天来源、同日及过去目标，冲突整批回滚', async () => {
+  const f = await fixture(); const a = await f.publish();
+  const b = await f.publish({ start: f.now() + 2 * 86400000 + 3600000, end: f.now() + 2 * 86400000 + 7200000 });
+  const input = { sessionIds: [a.id, b.id], sourceStart: Date.parse('2026-11-03T00:00:00+08:00'), targetStart: Date.parse('2026-11-06T00:00:00+08:00') };
+  await rejectsCode(f.call('student', 'copyDay', input), 'FORBIDDEN');
+  await rejectsCode(f.call('coach2', 'copyDay', input), 'FORBIDDEN');
+  await rejectsCode(f.call('coach', 'copyDay', { ...input, targetStart: input.sourceStart }), 'TIME');
+  await rejectsCode(f.call('coach', 'copyDay', { ...input, targetStart: input.targetStart + 1 }), 'TIME');
+  await rejectsCode(f.call('coach', 'copyDay', { ...input, targetStart: input.sourceStart - 3 * 86400000 }), 'TIME');
+  await rejectsCode(f.call('coach', 'copyDay', { ...input, sourceStart: input.sourceStart + 86400000 }), 'TIME');
+  await f.publish({ start: input.targetStart + 9 * 3600000, end: input.targetStart + 10 * 3600000 });
+  const locks = await f.get('scheduleLocks');
+  await rejectsCode(f.call('coach', 'copyDay', input), 'CONFLICT');
+  assert.equal((await f.get('sessions')).length, 3);
+  assert.deepEqual(await f.get('scheduleLocks'), locks);
 });
 
 test('复制七天私教排班保留课程属性，不复制预约；重复请求不重复创建', async () => {

@@ -2,10 +2,10 @@ import { config } from '../config';
 import { callCloud } from './cloudbase';
 
 export type Role = 'student' | 'coach' | 'admin';
-export interface Profile { id: string; name: string; phone: string; birthday?: string; employmentType?: 'fullTime' | 'partTime'; roles: Role[]; status: string }
+export interface Profile { id: string; name: string; phone: string; birthday?: string; prices?: { private?: number; group?: number }; employmentType?: 'fullTime' | 'partTime'; roles: Role[]; status: string }
 export interface Session { id: string; kind: string; title: string; coachId: string; roomId: string; start: number; end: number; reserved: number; capacity: number; cost: number; status: string; cancelHours: number; cutoffMinutes: number; cancelReason?: string }
 export interface Pack { id: string; memberId: string; kind: string; available: number; frozen: number; consumed: number; total: number; expiresAt: number; coachIds: string[] }
-export interface Booking { id: string; sessionId: string; memberId: string; status: string; cost: number; packageId: string; cancelReason?: string; totalAmountFen?: number; unitPriceFen?: number; settleAmountFen?: number }
+export interface Booking { notificationState?: string; id: string; sessionId: string; memberId: string; status: string; cost: number; packageId: string; cancelReason?: string; totalAmountFen?: number; unitPriceFen?: number; settleAmountFen?: number }
 export interface Purchase { id: string; memberId: string; packageId: string; amountFen: number; method: string; note: string; at: number }
 export interface CoachPay {
   employmentType: 'fullTime' | 'partTime'; month: string;
@@ -19,7 +19,7 @@ export interface AdminFinance {
   todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number;
   coaches: { id: string; name: string; employmentType: 'fullTime' | 'partTime'; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[];
 }
-export interface Dashboard { profile: Profile | null; sessions?: Session[]; packages?: Pack[]; bookings?: Booking[]; purchases?: Purchase[]; coachPay?: CoachPay; adminFinance?: AdminFinance; inbox?: { id: string; userId: string; title: string; at: number }[]; users?: Profile[]; roster?: { id: string; name: string }[]; coaches?: { id: string; name: string }[]; ledger?: { id: string; packageId: string; memberId: string; type: string; at: number; delta: { available: number; frozen: number; consumed: number } }[] }
+export interface Dashboard { profile: Profile | null; sessions?: Session[]; packages?: Pack[]; bookings?: Booking[]; purchases?: Purchase[]; coachPay?: CoachPay; adminFinance?: AdminFinance; inbox?: { id: string; userId: string; title: string; at: number }[]; users?: Profile[]; roster?: { id: string; name: string }[]; coaches?: { id: string; name: string }[]; ledger?: { id: string; packageId: string; memberId: string; type: string; unit?: 'fen'; at: number; delta: { available: number; frozen: number; consumed: number } }[] }
 interface Reply<T> { ok: boolean; data: T; message?: string; code?: string }
 const requests = new Map<string, string>();
 export async function api<T>(role: Role, command: Record<string, unknown>): Promise<T> {

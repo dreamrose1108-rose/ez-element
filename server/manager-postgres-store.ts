@@ -61,6 +61,7 @@ export class ManagerPostgresStore implements Store {
       const snapshot = await this.snapshot();
       const writes = new Map<string, Write>();
       const tx: Tx = {
+        migrationRecords: async () => ({ packages: clone(Object.values(snapshot.tables.memberPackages)), bookings: clone(Object.values(snapshot.tables.bookings)) }),
         hasCoachWork: async (coachId, now) => {
           const sessions = Object.values(snapshot.tables.sessions).filter(s => s.coachId === coachId);
           const ids = new Set(sessions.map(s => s.id));
@@ -91,6 +92,14 @@ export class ManagerPostgresStore implements Store {
     throw Object.assign(new Error('PostgreSQL transaction retry limit exceeded'), { code: '40001' });
   }
 
+  async dueNotifications(now: number, limit: number) {
+    if (!Number.isSafeInteger(now) || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid notification query');
+    const result = await this.executor.executePGSql({ EnvId: this.envId, Sql: `SELECT data::text FROM public.ez_inbox
+      WHERE (data->'notification'->>'dueAt')::bigint <= ${now}
+      AND (data->'notification'->>'state' = 'pending' OR (data->'notification'->>'state' = 'sending' AND (data->'notification'->>'updatedAt')::bigint < ${now} - 60000))
+      ORDER BY (data->'notification'->>'dueAt')::bigint, id LIMIT ${limit}` });
+    return (result.Rows || []).map(row => JSON.parse(JSON.parse(row)[0]) as Tables['inbox']);
+  }
   async list<K extends Table>(table: K, filter: Partial<Tables[K]>, limit: number): Promise<Tables[K][]> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('Invalid query limit');
     const result = await this.executor.executePGSql({

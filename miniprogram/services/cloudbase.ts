@@ -68,12 +68,12 @@ function authError(error: unknown): boolean {
   return ['UNAUTHORIZED', 'UNAUTHENTICATED', 'ACCESS_TOKEN_EXPIRED', 'INVALID_ACCESS_TOKEN', 'CHECK_LOGIN_FAILED'].includes(String(code));
 }
 
-export async function callCloud(command: Record<string, unknown>): Promise<unknown> {
+export async function callCloud(command: Record<string, unknown>, functionName = 'api'): Promise<unknown> {
   const { client, login } = getClient();
   await login.ensure();
   for (let attempt = 0; ; attempt++) {
     try {
-      const response = await client.callFunction({ name: 'api', data: command, parse: true });
+      const response = await client.callFunction({ name: functionName, data: command, parse: true });
       const result = response.result;
       if (result && typeof result === 'object' && 'ok' in result && result.ok === false && authError(result) && attempt === 0) {
         await login.ensure(true);
