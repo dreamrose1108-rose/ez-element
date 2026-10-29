@@ -41,3 +41,21 @@ test('预约订阅一次申请三个准确模板，部分同意也绑定且反�
   assert.match(await module.exports.subscribeReceipt(true), /2\/3/);
   assert.equal(bindings, 1);
 });
+
+test('首页统一入口依次申请课程与消课提醒', async () => {
+  const compiled = await build({ entryPoints: ['miniprogram/services/receipt-notification.ts'], bundle: true, write: false, platform: 'neutral', format: 'cjs', plugins: [{ name: 'subscription-port', setup(builder) {
+    builder.onLoad({ filter: /cloudbase\.ts$/ }, () => ({ contents: 'export const callCloud = async () => ({ ok: true });', loader: 'ts' }));
+  } }] });
+  const module = { exports: {} as { subscribeReceipt(kind: 'all'): Promise<string> } };
+  const requested: string[][] = [];
+  vm.runInNewContext(compiled.outputFiles[0]!.text, { module, exports: module.exports, wx: {
+    async requestSubscribeMessage(options: { tmplIds: string[] }) {
+      requested.push(Array.from(options.tmplIds));
+      return Object.fromEntries(options.tmplIds.map(id => [id, 'accept']));
+    },
+    async login() { return { code: 'verified-code' }; },
+    request(options: { success(result: object): void }) { options.success({ statusCode: 200, data: { ok: true } }); },
+  } });
+  assert.match(await module.exports.subscribeReceipt('all'), /4\/4/);
+  assert.deepEqual(requested, [Object.values(bookingTemplates), [receiptTemplateId]]);
+});

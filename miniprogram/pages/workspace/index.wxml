@@ -17,7 +17,7 @@
       <view class="greeting">{{role === "admin" ? "门店工作台" : role === "coach" ? "授课工作台" : "你好，" + profile.name}}<text class="muted">{{role === "admin" ? "审核、排课、收款，各有入口" : role === "coach" ? "查看授课预约，及时确认出勤" : "查看预约，安排下一次训练"}}</text></view>
       <view wx:if="{{role === 'student'}}" class="subscription-prompt">
         <view class="subscription-copy"><text class="subscription-title">开启微信课程提醒</text><text class="muted">及时接收预约成功、取消、课前提醒和消课扣费通知。微信要求每类提醒由你主动订阅。</text></view>
-        <view class="subscription-actions"><button class="primary" data-kind="booking" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">预约与上课提醒</button><button class="secondary" data-kind="receipt" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">消课提醒</button></view>
+        <view class="subscription-actions"><button class="primary" data-kind="all" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">开启课程提醒</button></view>
         <text wx:if="{{subscriptionMessage}}" class="subscription-result">{{subscriptionMessage}}</text>
       </view>
       <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>

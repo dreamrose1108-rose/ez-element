@@ -306,7 +306,8 @@ Page({
   async enableReceiptNotification(e?: WechatMiniprogram.TouchEvent) {
     if (this.data.subscribingReceipt) return;
     this.setData({ subscribingReceipt: true, subscriptionMessage: '' });
-    try { this.setData({ subscriptionMessage: await subscribeReceipt(e?.currentTarget.dataset.kind === 'booking') }); }
+    const kind = e?.currentTarget.dataset.kind;
+    try { this.setData({ subscriptionMessage: await subscribeReceipt(kind === 'all' ? 'all' : kind === 'booking') }); }
     catch (e) { this.setData({ subscriptionMessage: e instanceof Error ? e.message : '订阅未完成，请稍后重试' }); }
     finally { this.setData({ subscribingReceipt: false }); }
   },

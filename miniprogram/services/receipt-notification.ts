@@ -5,11 +5,14 @@ export const receiptTemplateId = 'uQw9Dwn6iRzjlcoCjSnvOlXeeHHAFrDJ8o3xfcnHWbg';
 export const bookingTemplateIds = ['cT8g1p6dE-Kr3ooCZ6fWqdv7zUzZFYNJKPVOssF8hhA', 'a_5WEv4RCAsa_Z_fZKjIxemLgjOl8bfytueMQEjj848', 'L4V2yd5IyYeRJPm1WwM9OscJDFO8rzrAYkHxuosyvPc'];
 
 // Must be invoked directly from a user tap, before any network await.
-export async function subscribeReceipt(booking = false): Promise<string> {
+export async function subscribeReceipt(kind: boolean | 'all' = false): Promise<string> {
   if (config.mode !== 'cloud') return '演示模式不发送微信通知';
-  const tmplIds = booking ? bookingTemplateIds : [receiptTemplateId];
-  const result = await wx.requestSubscribeMessage({ tmplIds });
-  const accepted = tmplIds.filter(id => result[id] === 'accept').length;
+  const batches = kind === 'all' ? [bookingTemplateIds, [receiptTemplateId]] : [kind ? bookingTemplateIds : [receiptTemplateId]];
+  let accepted = 0;
+  for (const tmplIds of batches) {
+    const result = await wx.requestSubscribeMessage({ tmplIds });
+    accepted += tmplIds.filter(id => result[id] === 'accept').length;
+  }
   if (!accepted) return '未开启微信提醒，仍可查看站内消息';
   const { code } = await wx.login({ timeout: 10000 });
   if (!code) throw new Error('微信身份确认失败，请重新点击订阅');
@@ -22,7 +25,8 @@ export async function subscribeReceipt(booking = false): Promise<string> {
     },
     fail: () => reject(new Error('通知绑定连接失败，请稍后重新订阅')),
   }));
-  return `本次订阅已完成${booking ? `（${accepted}/3 类）` : ''}；后续提醒需有可用订阅次数`;
+  const total = batches.reduce((sum, ids) => sum + ids.length, 0);
+  return `本次订阅已完成${total > 1 ? `（${accepted}/${total} 类）` : ''}；后续提醒需有可用订阅次数`;
 }
 
 export async function sendReceiptNotification(bookingId: string): Promise<void> {
