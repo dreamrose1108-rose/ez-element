@@ -329,7 +329,15 @@ Page({
     finally { this.setData({ busy: false }); }
     const { error, errorScope, errorId } = this.data; await this.refresh(); if (error) this.setData({ error, errorScope, errorId });
   },
-  confirmBook() { const p = this.data.eligible[this.data.packageIndex]; if (p) this.mutate({ action: 'book', sessionId: this.data.selectedId, packageId: p.id, ...(p.expectedAmountFen ? { expectedAmountFen: p.expectedAmountFen } : {}) }, '预约成功'); },
+  async confirmBook() {
+    const p = this.data.eligible[this.data.packageIndex];
+    if (!p || this.data.busy || this.data.subscribingReceipt) return;
+    this.setData({ subscribingReceipt: true, subscriptionMessage: '' });
+    try { this.setData({ subscriptionMessage: await subscribeReceipt(true) }); }
+    catch (e) { this.setData({ subscriptionMessage: e instanceof Error ? e.message : '订阅未完成，已继续预约' }); }
+    finally { this.setData({ subscribingReceipt: false }); }
+    await this.mutate({ action: 'book', sessionId: this.data.selectedId, packageId: p.id, ...(p.expectedAmountFen ? { expectedAmountFen: p.expectedAmountFen } : {}) }, '预约成功');
+  },
   async cancelBooking(e: WechatMiniprogram.TouchEvent) { const r = await wx.showModal({ title: '取消预约', content: '取消后冻结金额退回可用余额，是否继续？' }); if (r.confirm) this.mutate({ action: 'cancel', bookingId: e.currentTarget.dataset.id }, '已取消'); },
   async settle(e: WechatMiniprogram.TouchEvent) {
     const outcome = e.currentTarget.dataset.outcome; const bookingId = String(e.currentTarget.dataset.id);
