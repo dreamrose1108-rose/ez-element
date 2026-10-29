@@ -18,6 +18,8 @@ export interface CoachPay {
 export interface AdminFinance {
   todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number;
   coaches: { id: string; name: string; employmentType: 'fullTime' | 'partTime'; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[];
+  historyMonths: string[];
+  teachingHistory: { id: string; coachId: string; memberId: string; memberName: string; month: string; start: number; end: number; title: string; kind: string; status: string; cost: number; amountFen: number }[];
 }
 export interface Dashboard { profile: Profile | null; sessions?: Session[]; packages?: Pack[]; bookings?: Booking[]; purchases?: Purchase[]; coachPay?: CoachPay; adminFinance?: AdminFinance; inbox?: { id: string; userId: string; title: string; at: number }[]; users?: Profile[]; roster?: { id: string; name: string }[]; coaches?: { id: string; name: string }[]; ledger?: { id: string; packageId: string; memberId: string; type: string; unit?: 'fen'; at: number; delta: { available: number; frozen: number; consumed: number } }[] }
 interface Reply<T> { ok: boolean; data: T; message?: string; code?: string }

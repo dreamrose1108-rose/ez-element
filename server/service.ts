@@ -435,6 +435,8 @@ export class GymService {
     let adminFinance: {
       todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number;
       coaches: { id: string; name: string; employmentType: 'fullTime' | 'partTime'; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[];
+      historyMonths: string[];
+      teachingHistory: { id: string; coachId: string; memberId: string; memberName: string; month: string; start: number; end: number; title: string; kind: string; status: string; cost: number; amountFen: number }[];
     } | undefined;
     if (admin) {
       const today = dayKey(this.clock());
@@ -446,6 +448,13 @@ export class GymService {
       const coaches = activeUsers.filter(u => hasRole(u, 'coach'));
       const payroll = await Promise.all(coaches.map(async coachUser => ({ coach: coachUser, pay: await this.coachPaySummary(coachUser) })));
       const bookingById = new Map(allBookings.map(b => [b.id, b])); const sessionById = new Map(allSessions.map(s => [s.id, s]));
+      const userById = new Map(activeUsers.map(u => [u.id, u]));
+      const receiptByBooking = new Map(allInbox.filter(notice => notice.receipt).map(notice => [notice.bookingId, notice.receipt!]));
+      const teachingHistory = allBookings.filter(booking => booking.status === 'attended' || booking.status === 'absent').flatMap(booking => {
+        const session = sessionById.get(booking.sessionId); if (!session) return [];
+        return [{ id: booking.id, coachId: session.coachId, memberId: booking.memberId, memberName: userById.get(booking.memberId)?.name || booking.memberId.slice(-6), month: dayKey(session.end).slice(0, 7), start: session.start, end: session.end, title: session.title, kind: session.kind, status: booking.status, cost: booking.cost, amountFen: receiptByBooking.get(booking.id)?.deductedFen || booking.amountFen || 0 }];
+      }).sort((a, b) => b.start - a.start);
+      const historyMonths = [...new Set([today.slice(0, 7), ...teachingHistory.map(item => item.month)])].sort().reverse();
       const todayConsumedFen = allInbox.filter(notice => {
         if (!notice.receipt) return false;
         const booking = bookingById.get(notice.bookingId); const session = booking && sessionById.get(booking.sessionId);
@@ -455,6 +464,7 @@ export class GymService {
       const todayCoachPayFen = payroll.reduce((sum, item) => sum + item.pay.todayTotalFen, 0);
       adminFinance = {
         todayRevenueFen, todayConsumedFen, todayCoachPayFen, todayAfterCoachPayFen: todayRevenueFen - todayCoachPayFen,
+        historyMonths, teachingHistory,
         coaches: payroll.map(({ coach: coachUser, pay }) => ({ id: coachUser.id, name: coachUser.name, employmentType: pay.employmentType,
           todayClassCommissionFen: pay.todayClassCommissionFen, todayPerformanceCommissionFen: pay.todayPerformanceCommissionFen,
           todayTotalFen: pay.todayTotalFen, monthEstimatedTotalFen: pay.estimatedTotalFen })),

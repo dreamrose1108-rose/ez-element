@@ -31,7 +31,7 @@ interface CoachPayView {
 }
 interface AdminFinanceView {
   todayRevenueLabel: string; todayConsumedLabel: string; todayCoachPayLabel: string; todayAfterCoachPayLabel: string; negative: boolean;
-  coaches: { id: string; name: string; employmentTypeName: string; todayClassCommissionLabel: string; todayPerformanceCommissionLabel: string; todayTotalLabel: string; monthEstimatedTotalLabel: string }[];
+  coaches: { id: string; name: string; employmentTypeName: string; todayClassCommissionLabel: string; todayPerformanceCommissionLabel: string; todayTotalLabel: string; monthEstimatedTotalLabel: string; historyClassCount: number; historyStudentCount: number; historyRevenueLabel: string; records: { id: string; memberName: string; title: string; schedule: string; kindName: string; statusName: string; amountLabel: string }[] }[];
 }
 let snapshot: Dashboard = { profile: null };
 let snapshotLoadedAt = 0;
@@ -58,6 +58,7 @@ Page({
     memberPacks: [] as object[], memberBookings: [] as object[],
     coachPay: null as CoachPayView | null,
     adminFinance: null as AdminFinanceView | null,
+    adminHistoryMonth: '', adminHistoryMonthIndex: 0, adminHistoryMonths: [] as { value: string; label: string }[], adminCoachDetailId: '',
     totalAvailable: 0, totalFrozen: 0, totalConsumed: 0, myCount: 0,
     editing: null as null | { id: string; title: string; day: string; start: string; end: string; room: string; capacity: number; kind: string },
     copyCount: 0, copyEnd: '', copyTarget: '', copyTargetEnd: '', copyUnavailable: false,
@@ -131,15 +132,26 @@ Page({
       baseSalaryLabel: money(pay.baseSalaryFen), bonusLabel: money(pay.bonusFen), estimatedTotalLabel: money(pay.estimatedTotalFen),
     } : null;
     const finance = snapshot.adminFinance;
+    const historyMonthValues = finance?.historyMonths?.length ? finance.historyMonths : [dayKey(now).slice(0, 7)];
+    const historyMonth = historyMonthValues.includes(this.data.adminHistoryMonth) ? this.data.adminHistoryMonth : historyMonthValues[0]!;
+    const historyMonths = historyMonthValues.map(value => ({ value, label: `${value.slice(0, 4)} 年 ${Number(value.slice(5))} 月` }));
     const adminFinance: AdminFinanceView | null = this.data.role === 'admin' && finance ? {
       todayRevenueLabel: money(finance.todayRevenueFen), todayConsumedLabel: money(finance.todayConsumedFen),
       todayCoachPayLabel: money(finance.todayCoachPayFen), todayAfterCoachPayLabel: money(finance.todayAfterCoachPayFen), negative: finance.todayAfterCoachPayFen < 0,
-      coaches: finance.coaches.map(item => ({ id: item.id, name: item.name, employmentTypeName: item.employmentType === 'fullTime' ? '全职' : '兼职',
-        todayClassCommissionLabel: money(item.todayClassCommissionFen), todayPerformanceCommissionLabel: money(item.todayPerformanceCommissionFen),
-        todayTotalLabel: money(item.todayTotalFen), monthEstimatedTotalLabel: money(item.monthEstimatedTotalFen) })),
+      coaches: finance.coaches.map(item => {
+        const rawRecords = (finance.teachingHistory || []).filter(record => record.coachId === item.id && record.month === historyMonth);
+        const attended = rawRecords.filter(record => record.status === 'attended');
+        return { id: item.id, name: item.name, employmentTypeName: item.employmentType === 'fullTime' ? '全职' : '兼职',
+          todayClassCommissionLabel: money(item.todayClassCommissionFen), todayPerformanceCommissionLabel: money(item.todayPerformanceCommissionFen),
+          todayTotalLabel: money(item.todayTotalFen), monthEstimatedTotalLabel: money(item.monthEstimatedTotalFen),
+          historyClassCount: new Set(attended.map(record => record.id)).size, historyStudentCount: new Set(attended.map(record => record.memberId)).size,
+          historyRevenueLabel: money(rawRecords.reduce((sum, record) => sum + record.amountFen, 0)),
+          records: rawRecords.map(record => ({ id: record.id, memberName: record.memberName, title: record.title, schedule: `${dayKey(record.start)} ${time(record.start)}–${time(record.end)}`, kindName: record.kind === 'private' ? '私教' : '团课', statusName: record.status === 'attended' ? '已到课' : '爽约已结算', amountLabel: money(record.amountFen) })),
+        };
+      }),
     } : null;
     const rosterIds = new Set(bookings.map(b => b.memberId));
-    this.setData({ coachPay, adminFinance, todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
+    this.setData({ coachPay, adminFinance, adminHistoryMonth: historyMonth, adminHistoryMonthIndex: Math.max(0, historyMonthValues.indexOf(historyMonth)), adminHistoryMonths: historyMonths, todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
     const packs = (snapshot.packages || []).filter(p => p.kind !== 'wallet' && (this.data.role === 'admin' || p.memberId === profile?.id));
     const wallet = (snapshot.packages || []).find(p => p.kind === 'wallet' && p.memberId === profile?.id);
     this.setData({ wallet: wallet ? walletView(wallet) : null, ownPrivatePrice: profile?.prices?.private ? money(profile.prices.private) : '未设置', ownGroupPrice: profile?.prices?.group ? money(profile.prices.group) : '未设置' });
@@ -187,6 +199,13 @@ Page({
   closeMember() { this.setData({ memberDetailId: '', memberDetail: null, memberPacks: [], memberBookings: [], coachMember: null }); },
   switchRole(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const role = e.currentTarget.dataset.role as Role; if (role === this.data.role || !this.data.roles.some(r => r.id === role)) return; this.closeMember(); this.setData({ role, roleName: roleNames[role], navItems: navigation[role], tab: 'home', kind: role === 'coach' ? 'private' : this.data.kind, selectedId: '', editing: null }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); if (!this.data.demo && snapshot.profile?.id === this.data.profile?.id && snapshotLoadedAt > 0 && Date.now() - snapshotLoadedAt < SWITCH_CACHE_MS) { this.setData({ error: '' }); this.applySnapshot(); } else { this.refresh(); } },
   switchTab(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const tab = String(e.currentTarget.dataset.tab); if (!navigation[this.data.role].some(item => item.id === tab)) return; this.closeMember(); this.setData({ tab, selectedId: '', editing: null, error: '' }); if (tab === 'finance') this.loadMemberPrices(); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); },
+  chooseAdminHistoryMonth(e: WechatMiniprogram.PickerChange) {
+    const index = Number(e.detail.value); const month = this.data.adminHistoryMonths[index]?.value;
+    if (!month) return; this.setData({ adminHistoryMonth: month, adminHistoryMonthIndex: index, adminCoachDetailId: '' }); this.renderData();
+  },
+  toggleAdminCoachHistory(e: WechatMiniprogram.TouchEvent) {
+    const id = String(e.currentTarget.dataset.id); this.setData({ adminCoachDetailId: this.data.adminCoachDetailId === id ? '' : id });
+  },
   chooseDay(e: WechatMiniprogram.TouchEvent) { this.setData({ day: String(e.currentTarget.dataset.day) }); this.renderData(); },
   chooseScheduleDate(e: WechatMiniprogram.PickerChange) { this.setData({ day: String(e.detail.value) }); this.renderData(); },
   chooseKind(e: WechatMiniprogram.TouchEvent) { this.setData({ kind: String(e.currentTarget.dataset.kind) }); this.renderData(); },

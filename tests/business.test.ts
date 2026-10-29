@@ -118,10 +118,12 @@ test('教练工资按全兼职制度核算今日收入和本月预估，爽约�
   assert.equal(fullTime.performanceCommissionFen, 630000); assert.equal(fullTime.todayPerformanceCommissionFen, 610000);
   assert.equal(fullTime.baseSalaryFen, 220000); assert.equal(fullTime.bonusFen, 100000);
   assert.equal(fullTime.estimatedTotalFen, 954000); assert.equal(fullTime.todayTotalFen, 614000);
-  const adminFinance = (await f.service.execute('admin', { action: 'dashboard' }) as { adminFinance: { todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number; coaches: { id: string; name: string; employmentType: string; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[] } }).adminFinance;
+  const adminFinance = (await f.service.execute('admin', { action: 'dashboard' }) as { adminFinance: { todayRevenueFen: number; todayConsumedFen: number; todayCoachPayFen: number; todayAfterCoachPayFen: number; historyMonths: string[]; teachingHistory: { memberName: string; status: string; amountFen: number; month: string }[]; coaches: { id: string; name: string; employmentType: string; todayClassCommissionFen: number; todayPerformanceCommissionFen: number; todayTotalFen: number; monthEstimatedTotalFen: number }[] } }).adminFinance;
   assert.equal(adminFinance.todayRevenueFen, 6100000); assert.equal(adminFinance.todayConsumedFen, 40000);
   assert.equal(adminFinance.todayCoachPayFen, 614000); assert.equal(adminFinance.todayAfterCoachPayFen, 5486000);
   assert.deepEqual(adminFinance.coaches.find(item => item.id === userKey('coach')), { id: userKey('coach'), name: 'coach', employmentType: 'fullTime', todayClassCommissionFen: 4000, todayPerformanceCommissionFen: 610000, todayTotalFen: 614000, monthEstimatedTotalFen: 954000 });
+  assert.ok(adminFinance.historyMonths.includes(adminFinance.teachingHistory[0]!.month));
+  assert.deepEqual(adminFinance.teachingHistory.map(item => [item.memberName, item.status, item.amountFen]), [['student', 'absent', 20000], ['student', 'attended', 20000]]);
 
   await f.call('admin', 'updateCoachPay', { userId: userKey('coach'), employmentType: 'partTime' });
   const partTime = (await f.service.execute('coach', { action: 'dashboard' }) as unknown as { coachPay: Record<string, number | string> }).coachPay;

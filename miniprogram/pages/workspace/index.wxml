@@ -29,6 +29,11 @@
         <view class="section finance-section">今日教练收入</view>
         <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-pay-row"><view><text class="title">{{item.name}}</text><text class="muted">{{item.employmentTypeName}} · 课时 {{item.todayClassCommissionLabel}} · 业绩 {{item.todayPerformanceCommissionLabel}}</text></view><view class="pay-row-total"><text>{{item.todayTotalLabel}}</text><text>本月 {{item.monthEstimatedTotalLabel}}</text></view></view>
         <view wx:if="{{!adminFinance.coaches.length}}" class="empty">暂无教练工资数据</view>
+        <view class="history-heading"><view><text class="section">教练历史授课</text><text class="muted">按月查看学员与结算记录</text></view><picker range="{{adminHistoryMonths}}" range-key="label" value="{{adminHistoryMonthIndex}}" bindchange="chooseAdminHistoryMonth"><view class="history-month">{{adminHistoryMonths[adminHistoryMonthIndex].label}} ›</view></picker></view>
+        <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-history-card">
+          <view class="row"><view><text class="title">{{item.name}}</text><text class="muted">已到课 {{item.historyClassCount}} 节 · {{item.historyStudentCount}} 位学员 · 消课 {{item.historyRevenueLabel}}</text></view><button class="compact secondary" data-id="{{item.id}}" bindtap="toggleAdminCoachHistory">{{adminCoachDetailId === item.id ? '收起' : '查看明细'}}</button></view>
+          <view wx:if="{{adminCoachDetailId === item.id}}" class="teaching-records"><view wx:for="{{item.records}}" wx:for-item="record" wx:key="id" class="teaching-record"><view class="row"><text class="title">{{record.memberName}}</text><text class="badge status-{{record.statusName === '已到课' ? 'attended' : 'absent'}}">{{record.statusName}}</text></view><text class="schedule">{{record.schedule}} · {{record.kindName}}</text><text class="muted">{{record.title}} · 结算 {{record.amountLabel}}</text></view><view wx:if="{{!item.records.length}}" class="empty">该月暂无已结算授课记录</view></view>
+        </view>
         <text class="finance-note">今日公司实收包括储值充值与旧课包收款；今日消课金额按当日到课或爽约的实际扣款统计。实收减教练工资不含房租、税费、社保津贴及其他成本。</text>
       </view>
       <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
