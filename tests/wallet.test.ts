@@ -21,13 +21,18 @@ async function setup() {
 }
 const rejectsCode = (p: Promise<unknown>, code: string) => assert.rejects(p, (e: unknown) => e instanceof BusinessError && e.code === code);
 
-test('一次充值同时用于私教和团课，预约锁价，取消和结算按原金额记账', async () => {
+test('调价不改已使用或已预约金额，仅后续新预约使用新单价', async () => {
   const f = await setup(); await f.recharge();
   const a = await f.publish('private'); const b = await f.publish('group', 7200000);
   const ba = await f.book(a.id, 22000); const bb = await f.book(b.id, 10000);
   assert.equal((await f.wallet())?.available, 408000); assert.equal((await f.wallet())?.frozen, 32000);
   await f.call('admin', 'setMemberPrices', { userId: userKey('student'), prices: { private: 30000, group: 15000 } });
+  const later = await f.publish('private', 14400000); const laterBooking = await f.book(later.id, 30000);
+  const afterPriceChange = await f.service.execute('student', { action: 'dashboard' }) as { bookings: { id: string; unitPriceFen?: number }[] };
+  assert.equal(afterPriceChange.bookings.find(item => item.id === ba.id)?.unitPriceFen, 22000);
+  assert.equal(afterPriceChange.bookings.find(item => item.id === laterBooking.id)?.unitPriceFen, 30000);
   await f.call('student', 'cancel', { bookingId: bb.id });
+  await f.call('student', 'cancel', { bookingId: laterBooking.id });
   assert.equal((await f.wallet())?.available, 418000);
   f.advance(3 * 86400000);
   await f.call('coach', 'settle', { bookingId: ba.id, outcome: 'attended' });
