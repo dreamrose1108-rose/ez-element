@@ -177,7 +177,7 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
 
   // New recharges are money, independent of both legacy packs and course type.
   p.setData({ role: 'admin' }); await p.refresh();
-  const rechargePage = p as PageHarness & { purchase(): void };
+  const rechargePage = p as PageHarness & { purchase(): void; saveSelectedMemberPrices(): Promise<void> };
   p.setData({ memberIndex: (p.data.users as { id: string }[]).findIndex(u => u.id === userKey('student')), purchaseExpiry: '2099-12-31' });
   p.setData({ purchaseAmount: '4500.01', privatePrice: '220', groupPrice: '100', purchaseNote: '' });
   rechargePage.purchase();
@@ -186,16 +186,20 @@ test('原生页面控制器：教练排班同步到学员七天列表，预约/�
   p.setData({ purchaseNote: 'wallet test' });
   rechargePage.purchase(); await idle();
   assert.equal(p.data.error, '');
+  p.setData({ privatePrice: '230', groupPrice: '110' });
+  await rechargePage.saveSelectedMemberPrices();
+  assert.deepEqual((await store.transaction(tx => tx.get('users', userKey('student'))))?.prices, { private: 23000, group: 11000 });
   p.setData({ role: 'student' }); await p.refresh();
   assert.equal((p.data.wallet as { available: string }).available, '¥4600.01');
+  assert.equal(p.data.ownPrivatePrice, '¥230.00'); assert.equal(p.data.ownGroupPrice, '¥110.00');
   assert.equal(p.data.totalAvailable, 0, '储值金额不得混入旧课时数量');
   const group = await service.execute('admin', { action: 'publish', requestId: 'page-wallet-group', kind: 'group', title: '储值团课', coachId: userKey('coach'), roomId: 'group', exclusive: false, start: Date.parse(`${days[5]!.key}T18:00:00+08:00`), end: Date.parse(`${days[5]!.key}T19:00:00+08:00`), capacity: 10, cost: 1 }) as { id: string };
   await p.refresh(); p.selectSession({ currentTarget: { dataset: { id: group.id } } });
   const options = p.data.eligible as { id: string; freezeLabel: string }[];
-  assert.equal(options.length, 1); assert.equal(options[0]?.freezeLabel, '¥100.00');
+  assert.equal(options.length, 1); assert.equal(options[0]?.freezeLabel, '¥110.00');
   p.confirmBook(); await idle(); assert.equal(p.data.error, '');
-  assert.equal((p.data.wallet as { available: string }).available, '¥4500.01');
-  assert.equal((p.data.wallet as { frozen: string }).frozen, '¥100.00');
+  assert.equal((p.data.wallet as { available: string }).available, '¥4490.01');
+  assert.equal((p.data.wallet as { frozen: string }).frozen, '¥110.00');
   p.setData({ role: 'admin', copySourceDay: targetDay, copyDestinationDay: new Date(Date.parse(`${targetDay}T12:00:00+08:00`) + 3 * 86400000).toISOString().slice(0, 10) });
   const copySource = (await store.list('sessions', {}, 200)).find(s => s.status === 'open' && s.start === Date.parse(`${targetDay}T09:30:00+08:00`))!;
   const legacy = { ...copySource, id: 'legacy-119-minute-slot', start: copySource.start + 4 * 3600000, end: copySource.start + 4 * 3600000 + 119 * 60000 };

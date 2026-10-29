@@ -178,7 +178,9 @@
           <view class="form-columns"><view class="form-field"><text class="field-label">本学员私教单价 / 元</text><input class="private-price" name="privatePrice" type="digit" value="{{privatePrice}}" bindinput="editPrivatePrice" placeholder="如 220.00" disabled="{{busy}}"/></view><view class="form-field"><text class="field-label">本学员团课单价 / 元</text><input class="group-price" name="groupPrice" type="digit" value="{{groupPrice}}" bindinput="editGroupPrice" placeholder="如 100.00" disabled="{{busy}}"/></view></view>
 
 
-          <text class="price-help">设置本学员的私教、团课单价，预约时按课程类型冻结金额。充值不折算课时，也不限制授课教练。已有预约保留原单价。</text>
+          <text class="price-help">设置本学员已购账户的私教、团课单价，预约时按课程类型冻结金额。充值不折算课时，也不限制授课教练。已有预约保留原单价。</text>
+          <view class="price-adjust-panel"><view><text class="field-label">只调整已购课包单价</text><text class="muted">无需再次充值；保存后仅新预约使用新单价。</text></view><button class="secondary compact" bindtap="saveSelectedMemberPrices" loading="{{busy && errorScope === 'setMemberPrices'}}" disabled="{{busy || !users.length}}">保存新单价</button></view>
+          <view wx:if="{{error && errorScope === 'setMemberPrices'}}" class="error">{{error}}</view>
           <text class="field-label">有效期至</text><picker mode="date" start="{{today}}" end="2099-12-31" value="{{purchaseExpiry || today}}" bindchange="choosePurchaseExpiry" disabled="{{busy}}"><view class="picker field-select"><text class="{{purchaseExpiry ? '' : 'field-placeholder'}}">{{purchaseExpiry || '选择到期日期'}}</text><text class="field-arrow">›</text></view></picker>
           <text class="field-label">收款凭据 / 备注</text><input class="purchase-note" name="note" value="{{purchaseNote}}" bindinput="editPurchaseNote" maxlength="200" disabled="{{busy}}" placeholder="填写转账凭据或备注（必填）"/>
           <view class="error" wx:if="{{error && errorScope === 'recharge'}}">{{error}}</view>

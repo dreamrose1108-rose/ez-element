@@ -202,6 +202,16 @@ Page({
   editPurchaseNote(e: WechatMiniprogram.Input) { this.setData({ purchaseNote: e.detail.value }); },
   editPrivatePrice(e: WechatMiniprogram.Input) { this.setData({ privatePrice: e.detail.value }); },
   editGroupPrice(e: WechatMiniprogram.Input) { this.setData({ groupPrice: e.detail.value }); },
+  async saveSelectedMemberPrices() {
+    if (this.data.role !== 'admin' || this.data.busy) return;
+    const member = this.data.users[this.data.memberIndex];
+    this.beginActionError('setMemberPrices', member?.id || '');
+    if (!member?.id) { this.setData({ error: '请选择需要调整单价的学员' }); return; }
+    let prices: { private: number; group: number };
+    try { prices = { private: positiveMoneyFen(this.data.privatePrice, '私教单价'), group: positiveMoneyFen(this.data.groupPrice, '团课单价') }; }
+    catch (e) { this.setData({ error: e instanceof Error ? e.message : '请检查课程单价' }); return; }
+    await this.mutate({ action: 'setMemberPrices', userId: member.id, prices }, '课包单价已调整');
+  },
   editMemberPrivatePrice(e: WechatMiniprogram.Input) { this.setData({ memberPrivatePrice: e.detail.value }); },
   editMemberGroupPrice(e: WechatMiniprogram.Input) { this.setData({ memberGroupPrice: e.detail.value }); },
   async saveMemberPrices() {
