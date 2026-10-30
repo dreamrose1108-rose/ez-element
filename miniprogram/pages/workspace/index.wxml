@@ -34,7 +34,7 @@
         <button data-filter="completed" bindtap="chooseBookingFilter" class="{{bookingFilter === 'completed' ? 'selected' : ''}}">已完成</button>
         <button data-filter="cancelled" bindtap="chooseBookingFilter" class="{{bookingFilter === 'cancelled' ? 'selected' : ''}}">已取消</button>
       </view></scroll-view>
-      <view wx:if="{{!visibleBookings.length}}" class="empty">暂无预约记录</view>
+      <view wx:if="{{!visibleBookings.length}}" class="empty">{{role === 'coach' && bookingFilter === 'settle' ? '暂无待确认出勤' : '暂无预约记录'}}</view>
       <view class="card booking-card {{item.statusClass}}" wx:for="{{visibleBookings}}" wx:key="id">
         <view class="row"><text class="title">{{item.title}}</text><text class="badge booking-status status-{{item.status}}">{{item.canSettle ? '待确认出勤' : item.statusName}}</text></view>
         <text class="schedule">{{item.schedule || '历史课程时间未加载'}}</text>
@@ -73,8 +73,8 @@
             <view class="week-time-canvas">
               <view class="week-time-head"><text wx:for="{{scheduleTimes}}" wx:key="key">{{item.label}}</text></view>
               <view wx:for="{{weekScheduleDays}}" wx:key="key" wx:for-item="dayItem" class="week-day-slots">
-                <view wx:for="{{dayItem.slots}}" wx:key="key" wx:for-item="slot" wx:if="{{slot.visible}}" class="schedule-block {{slot.state}} {{slot.disabled ? 'disabled' : ''}} {{slot.selected ? 'selected' : ''}}" style="grid-column:span {{slot.span}}" data-index="{{slot.index}}" bindtap="tapScheduleSlot" bindlongpress="startScheduleDrag" bindtouchmove="moveScheduleDrag" bindtouchend="endScheduleDrag" bindtouchcancel="cancelScheduleDrag">
-                  <text class="slot-time">{{slot.sessionId ? slot.displayTime : slot.stateName}}</text><text class="slot-state">{{slot.sessionId ? slot.stateName + ' · ' + slot.durationLabel : ''}}</text>
+                <view wx:for="{{dayItem.slots}}" wx:key="key" wx:for-item="slot" wx:if="{{slot.visible}}" class="schedule-block {{slot.state}} {{slot.disabled ? 'disabled' : ''}} {{slot.selected ? 'selected' : ''}}" style="grid-column:span {{slot.span}}" data-index="{{slot.index}}" bindtap="tapScheduleSlot" bindlongpress="startScheduleDrag" bindtouchmove="moveScheduleDrag" bindtouchend="endScheduleDrag" bindtouchcancel="cancelScheduleDrag" role="button" aria-label="{{slot.ariaLabel}}" aria-disabled="{{slot.disabled}}">
+                  <text wx:if="{{slot.sessionId}}" class="slot-time">{{slot.displayTime}}</text><text wx:if="{{slot.sessionId}}" class="slot-state">{{slot.stateName}} · {{slot.durationLabel}}</text><text wx:else class="slot-free-dot">·</text>
                 </view>
               </view>
             </view>
@@ -99,8 +99,8 @@
         </form>
       </view>
       <block wx:if="{{role === 'student' || kind === 'group'}}">
-      <view class="section">{{day}} · {{sessions.length}} 个已发布时段</view>
-      <view class="empty" wx:if="{{!sessions.length}}">当天暂无已发布课程，请切换日期。</view>
+      <view class="section">{{day}} · {{sessions.length}} 个{{role === 'student' ? '课程时段' : '已发布时段'}}</view>
+      <view class="empty schedule-empty" wx:if="{{!sessions.length}}"><text>{{role === 'student' ? scheduleEmptyMessage : '当天暂无已发布课程，请切换日期。'}}</text><button wx:if="{{role === 'student' && studentDayBookingCount}}" class="secondary" data-tab="home" bindtap="switchTab">查看我的课程</button></view>
       <view class="session-list {{kind === 'private' && role === 'student' ? 'slot-grid' : ''}}">
         <view class="card session" wx:for="{{sessions}}" wx:key="id">
           <view class="session-time"><text class="time">{{item.startLabel}}–{{item.endLabel}}</text><text class="badge">{{item.kindName}}</text></view>
@@ -235,7 +235,7 @@
       <view wx:if="{{role === 'student'}}" class="card"><view class="title">微信课程通知</view><text class="muted">可订阅预约成功、预约取消及课前 2 小时提醒；不足 2 小时预约时尽快提醒。消课通知单独订阅。每类通知都需要可用订阅次数，拒绝订阅不影响约课和站内消息。</text><button class="primary" data-kind="booking" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">订阅预约与上课提醒</button><button bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">订阅消课提醒</button><text wx:if="{{subscriptionMessage}}" class="notice">{{subscriptionMessage}}</text></view>
       <view wx:for="{{messages}}" wx:key="id" class="card"><view class="title">{{item.title}}</view><view wx:if="{{item.detail}}" class="receipt-detail">{{item.detail}}</view><text class="muted">{{item.date}}</text></view><view wx:if="{{!messages.length}}" class="empty">暂无消息</view></block>
   </block>
-  <view wx:if="{{profile && profile.status === 'active'}}" class="workspace-nav" role="tablist" aria-label="主功能导航"><button wx:for="{{navItems}}" wx:key="id" class="{{tab === item.id ? 'on' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" disabled="{{busy}}" role="tab" aria-selected="{{tab === item.id}}">{{item.name}}</button></view>
+  <view wx:if="{{profile && profile.status === 'active'}}" class="workspace-nav" role="tablist" aria-label="主功能导航"><button wx:for="{{navItems}}" wx:key="id" class="{{tab === item.id ? 'on' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" disabled="{{busy}}" role="tab" aria-label="{{item.ariaName || item.name}}" aria-selected="{{tab === item.id}}">{{item.name}}</button></view>
 </view>
 <view wx:if="{{selectedId}}" class="overlay"><view class="sheet"><view class="row"><text class="page-title">确认预约</text><button class="compact secondary" bindtap="dismiss">关闭</button></view><view class="title">{{selectedTitle}}</view><text class="schedule">{{selectedTime}}</text><picker wx:if="{{eligible.length}}" range="{{eligible}}" range-key="label" value="{{packageIndex}}" bindchange="choosePackage"><view class="picker">{{eligible[packageIndex].label}} ›</view></picker><text class="muted" wx:else>可用余额不足、价格未设置或账户已到期，请联系门店。</text><view class="notice">本次冻结 {{eligible[packageIndex].freezeLabel || '—'}}，开课前 {{selectedCancel}} 小时可自助取消。确认时可同时开启微信课程提醒，拒绝不影响预约。</view><button class="primary" bindtap="confirmBook" loading="{{subscribingReceipt || busy}}" disabled="{{!eligible.length || busy || subscribingReceipt}}">确认预约 · 冻结 {{eligible[packageIndex].freezeLabel || '—'}}</button></view></view>
 

@@ -37,7 +37,10 @@ test('cloud role switches reuse a recent authorized snapshot; refresh, expiry an
   const switchTo = (role: string) => page.switchRole({ currentTarget: { dataset: { role } } });
   const idle = async () => { for (let i = 0; page.data.busy && i < 50; i++) await new Promise(resolve => setTimeout(resolve, 1)); assert.equal(page.data.busy, false); };
   await page.refresh(); assert.equal(reads, 1);
-  switchTo('admin'); switchTo('coach'); switchTo('student');
+  switchTo('admin'); switchTo('coach');
+  assert.equal(page.data.bookingFilter, 'settle', 'coach opens on attendance confirmations');
+  assert.equal((page.data.navItems as { name: string }[]).map(item => item.name).join(','), '出勤,排班,学员,收入,消息');
+  switchTo('student');
   assert.equal(reads, 1); assert.equal(page.data.role, 'student');
   assert.equal(page.data.busy, false);
   switchTo('student'); assert.equal(reads, 1, 'same role is a no-op');

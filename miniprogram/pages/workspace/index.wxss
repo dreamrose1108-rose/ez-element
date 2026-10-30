@@ -165,6 +165,9 @@
 .schedule-block.disabled{opacity:.5;}
 .slot-time{max-width:100%;font-size:19rpx;font-weight:800;white-space:normal;}
 .slot-state{font-size:16rpx;font-weight:700;margin-top:5rpx;}
+.slot-free-dot{font-size:30rpx;line-height:1;color:#9a9ca0;transform:translateY(-2rpx);}
+.schedule-empty text{display:block;line-height:1.7;}
+.schedule-empty button{width:auto;min-height:80rpx;margin:22rpx auto 0;padding:18rpx 28rpx;}
 
 /* Workspace visual system: compact navigation, editorial headings, labelled forms. */
 page{background:#f7f7f2;}
@@ -367,6 +370,7 @@ page{background:#f4f5f6;}
 .page .card>button,.page .sheet>button,.page .session button{width:100%;min-height:80rpx;}
 .page .actions button{width:auto;min-width:0;margin-top:16rpx;min-height:80rpx;}
 .page .row button.compact{width:auto;flex:0 0 auto;min-height:68rpx;padding:18rpx 20rpx;}
+.page .booking-summary button.compact{min-width:88rpx;min-height:88rpx;padding:20rpx 22rpx;}
 .segments{background:#e9ecef;}
 .segments button{min-height:76rpx;}
 .member-section-tabs button{background:#e9ecef;}
