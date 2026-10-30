@@ -1,5 +1,5 @@
 {
-  "pages": ["pages/workspace/index"],
+  "pages": ["pages/workspace/index", "pages/coach-history/index"],
   "window": { "navigationBarTitleText": "Ez element", "navigationBarBackgroundColor": "#f4f4f3", "navigationBarTextStyle": "black", "backgroundColor": "#f4f4f3" },
   "style": "v2",
   "sitemapLocation": "sitemap.json"

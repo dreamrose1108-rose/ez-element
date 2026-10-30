@@ -1,9 +1,8 @@
-<view class="page">
+<view class="page role-{{role}} tab-{{tab}}">
   <view wx:if="{{demo}}" class="demo">本地开发演示 · 非真实账户与收款</view>
   <view class="workspace-header">
   <view class="brand"><view><text class="brand-cn">{{'Ez element'}}</text><text class="brand-en">MOVE WITH PURPOSE</text></view><text class="badge">{{roleName}}</text></view>
   <view class="roles" wx:if="{{roles.length > 1}}"><button wx:for="{{roles}}" wx:key="id" data-role="{{item.id}}" bindtap="switchRole" class="{{role === item.id ? 'active' : ''}}">{{item.name}}</button></view>
-  <view wx:if="{{profile && profile.status === 'active'}}" class="top-nav"><button wx:for="{{navItems}}" wx:key="id" class="{{tab === item.id ? 'on' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" disabled="{{busy}}">{{item.name}}</button></view>
   </view>
   <view class="error" wx:if="{{error && (role !== 'admin' || errorScope === 'load')}}">{{error}}<button wx:if="{{errorScope === 'load'}}" bindtap="refresh" size="mini">重试加载</button></view>
   <view wx:if="{{busy}}" class="hint">正在处理，请稍候…</view>
@@ -15,43 +14,48 @@
   <block wx:elif="{{profile && profile.status === 'active'}}">
     <block wx:if="{{tab === 'home'}}">
       <view class="greeting">{{role === "admin" ? "门店工作台" : role === "coach" ? "授课工作台" : "你好，" + profile.name}}<text class="muted">{{role === "admin" ? "审核、排课、收款，各有入口" : role === "coach" ? "查看授课预约，及时确认出勤" : "查看预约，安排下一次训练"}}</text></view>
-      <view wx:if="{{role === 'student'}}" class="subscription-prompt">
-        <view class="subscription-copy"><text class="subscription-title">开启微信课程提醒</text><text class="muted">及时接收预约成功、取消、课前提醒和消课扣费通知。微信要求每类提醒由你主动订阅。</text></view>
-        <view class="subscription-actions"><button class="primary" data-kind="all" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">开启课程提醒</button></view>
-        <text wx:if="{{subscriptionMessage}}" class="subscription-result">{{subscriptionMessage}}</text>
+      <view class="home-actions">
+        <button class="primary wide home-primary" data-tab="schedule" bindtap="switchTab"><view>{{role === 'student' ? '预约下一次训练' : role === 'coach' ? '安排我的授课时间' : '查看与安排课程'}}</view><text class="action-caption">{{role === 'student' ? '选日期 · 选教练 · 选时段' : '查看一周排班与课程安排'}} →</text></button>
+        <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">学员管理<text>审核申请与维护资料 ›</text></button><button class="secondary" data-tab="finance" bindtap="switchTab">收款账务<text>登记充值与查询流水 ›</text></button></view>
       </view>
-      <view wx:if="{{role === 'student'}}" class="hero"><text class="eyebrow">{{'Ez element'}} TRAINING CLUB</text><view class="hero-title">每一次训练，<view>都是新的可能。</view></view><text class="hero-sub">私教专属指导 / 团课一起进步</text><view class="ring"></view></view>
       <view wx:if="{{role === 'student'}}" class="pay-card"><text class="pay-eyebrow">通用储值 · 私教 / 团课</text><view class="pay-title">{{wallet ? wallet.available : '¥0.00'}}</view><text class="pay-detail">{{wallet && wallet.expired ? '已到期，请联系门店续期' : '可用余额'}} · 预约冻结 {{wallet ? wallet.frozen : '¥0.00'}}</text><text class="pay-detail">私教 {{ownPrivatePrice}} / 课时 · 团课 {{ownGroupPrice}} / 课时</text></view>
       <view wx:if="{{role === 'coach'}}" class="metrics"><view><text class="number">{{todayClasses}}</text><text>今日课程</text></view><view><text class="number">{{unsettledCount}}</text><text>待确认出勤</text></view><view><text class="number">{{myCount}}</text><text>待上课预约</text></view></view>
       <view wx:if="{{role === 'admin' && adminFinance}}" class="admin-finance-card">
         <view class="row"><view><text class="finance-eyebrow">今日经营概览</text><view class="finance-total">{{adminFinance.todayRevenueLabel}}</view><text class="finance-caption">今日公司实收</text></view><text class="badge">实时预估</text></view>
         <view class="finance-metrics"><view><text>{{adminFinance.todayConsumedLabel}}</text><text>今日消课金额</text></view><view><text>{{adminFinance.todayCoachPayLabel}}</text><text>教练工资预估</text></view><view class="{{adminFinance.negative ? 'negative' : ''}}"><text>{{adminFinance.todayAfterCoachPayLabel}}</text><text>实收减教练工资</text></view></view>
-        <view class="section finance-section">今日教练收入</view>
-        <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-pay-row"><view><text class="title">{{item.name}}</text><text class="muted">{{item.employmentTypeName}} · 课时 {{item.todayClassCommissionLabel}} · 业绩 {{item.todayPerformanceCommissionLabel}}</text></view><view class="pay-row-total"><text>{{item.todayTotalLabel}}</text><text>本月 {{item.monthEstimatedTotalLabel}}</text></view></view>
-        <view wx:if="{{!adminFinance.coaches.length}}" class="empty">暂无教练工资数据</view>
-        <view class="history-heading"><view><text class="section">教练历史授课</text><text class="muted">按月查看学员与结算记录</text></view><picker range="{{adminHistoryMonths}}" range-key="label" value="{{adminHistoryMonthIndex}}" bindchange="chooseAdminHistoryMonth"><view class="history-month">{{adminHistoryMonths[adminHistoryMonthIndex].label}} ›</view></picker></view>
-        <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-history-card">
-          <view class="row"><view><text class="title">{{item.name}}</text><text class="muted">已到课 {{item.historyClassCount}} 节 · {{item.historyStudentCount}} 位学员 · 消课 {{item.historyRevenueLabel}}</text></view><button class="compact secondary" data-id="{{item.id}}" bindtap="toggleAdminCoachHistory">{{adminCoachDetailId === item.id ? '收起' : '查看明细'}}</button></view>
-          <view wx:if="{{adminCoachDetailId === item.id}}" class="teaching-records"><view wx:for="{{item.records}}" wx:for-item="record" wx:key="id" class="teaching-record"><view class="row"><text class="title">{{record.memberName}}</text><text class="badge status-{{record.statusName === '已到课' ? 'attended' : 'absent'}}">{{record.statusName}}</text></view><text class="schedule">{{record.schedule}} · {{record.kindName}}</text><text class="muted">{{record.title}} · 结算 {{record.amountLabel}}</text></view><view wx:if="{{!item.records.length}}" class="empty">该月暂无已结算授课记录</view></view>
-        </view>
-        <text class="finance-note">今日公司实收包括储值充值与旧课包收款；今日消课金额按当日到课或爽约的实际扣款统计。实收减教练工资不含房租、税费、社保津贴及其他成本。</text>
+        <button class="secondary" data-section="income" bindtap="chooseFinanceSection">教练工资与授课明细 ›</button>
       </view>
-      <view wx:if="{{role === 'admin'}}" class="quick-actions"><button class="secondary" data-tab="account" bindtap="switchTab">审核与学员管理 →</button><button class="secondary" data-tab="finance" bindtap="switchTab">登记线下收款 →</button></view>
-      <button class="primary wide" data-tab="schedule" bindtap="switchTab">{{role === 'student' ? '预约训练 · 选日期与时间' : '查看一周排课'}} →</button>
+      <button wx:if="{{role === 'admin'}}" class="secondary wide" bindtap="openPending" disabled="{{busy}}">待审核申请 · {{pending.length}} 人 ›</button>
       <block wx:if="{{role !== 'admin'}}"><view class="section">{{role === 'student' ? '我的预约' : '授课与出勤'}}</view>
-      <view wx:if="{{!bookings.length}}" class="empty">暂无预约记录</view>
-      <view class="card booking-card {{item.statusClass}}" wx:for="{{bookings}}" wx:key="id">
-        <view class="row"><text class="title">{{item.title}}</text><text class="badge booking-status status-{{item.status}}">{{item.statusName}}</text></view>
-        <text class="schedule">{{item.schedule}}</text><text class="muted">{{role === 'student' ? '本次课时' : '学员 ' + item.memberName}} · {{item.cost}} 节</text>
+      <scroll-view scroll-x class="booking-filters"><view class="filter-row">
+        <button wx:if="{{role === 'coach'}}" data-filter="settle" bindtap="chooseBookingFilter" class="{{bookingFilter === 'settle' ? 'selected' : ''}}">待确认 {{unsettledCount}}</button>
+        <button wx:if="{{role === 'coach'}}" data-filter="today" bindtap="chooseBookingFilter" class="{{bookingFilter === 'today' ? 'selected' : ''}}">今日课程</button>
+        <button data-filter="upcoming" bindtap="chooseBookingFilter" class="{{bookingFilter === 'upcoming' ? 'selected' : ''}}">{{role === 'coach' ? '待办课程' : '待上课'}}</button>
+        <button data-filter="completed" bindtap="chooseBookingFilter" class="{{bookingFilter === 'completed' ? 'selected' : ''}}">已完成</button>
+        <button data-filter="cancelled" bindtap="chooseBookingFilter" class="{{bookingFilter === 'cancelled' ? 'selected' : ''}}">已取消</button>
+      </view></scroll-view>
+      <view wx:if="{{!visibleBookings.length}}" class="empty">暂无预约记录</view>
+      <view class="card booking-card {{item.statusClass}}" wx:for="{{visibleBookings}}" wx:key="id">
+        <view class="row"><text class="title">{{item.title}}</text><text class="badge booking-status status-{{item.status}}">{{item.canSettle ? '待确认出勤' : item.statusName}}</text></view>
+        <text class="schedule">{{item.schedule || '历史课程时间未加载'}}</text>
+        <view class="booking-summary"><text class="muted">{{role === 'student' ? item.coachName : item.memberName}} · {{item.cost}} 节<text wx:if="{{item.settleAmountLabel}}"> · {{item.status === 'confirmed' ? '预计扣款' : '结算'}} {{item.settleAmountLabel}}</text></text><button class="compact secondary" data-id="{{item.id}}" bindtap="toggleBooking">{{expandedBookingId === item.id ? '收起' : '详情'}}</button></view>
+        <block wx:if="{{expandedBookingId === item.id}}">
         <text wx:if="{{item.unitPriceLabel}}" class="price-detail">课单价 {{item.unitPriceLabel}}<text wx:if="{{item.status === 'confirmed' && item.settleAmountLabel}}"> · 本次预计扣款 {{item.settleAmountLabel}}</text></text>
         <text wx:if="{{item.cancelReason}}" class="muted">停课原因：{{item.cancelReason}}</text>
         <button wx:if="{{role === 'student' && item.canCancel}}" class="secondary" data-id="{{item.id}}" bindtap="cancelBooking" disabled="{{busy}}">取消预约</button>
         <text class="muted" wx:if="{{role === 'student' && item.status === 'confirmed' && !item.canCancel}}">需要变更请联系门店</text>
+        </block>
         <view class="error" wx:if="{{error && errorScope === 'settle' && errorId === item.id}}">{{error}}</view>
         <view wx:if="{{role === 'coach' && item.canSettle}}" class="row actions"><button class="primary" data-id="{{item.id}}" data-outcome="attended" bindtap="settle" disabled="{{busy}}">确认到课</button><button class="secondary" data-id="{{item.id}}" data-outcome="absent" bindtap="settle" disabled="{{busy}}">标记爽约</button></view>
-        <block wx:if="{{role === 'coach' && item.notificationLabel}}"><text class="muted">{{item.notificationLabel}}</text><view class="error" wx:if="{{error && errorScope === 'sendReceipt' && errorId === item.id}}">{{error}}</view><button wx:if="{{item.canRetryNotification}}" class="secondary" data-id="{{item.id}}" bindtap="retryReceiptNotification" disabled="{{busy}}">重试微信通知</button></block>
+        <block wx:if="{{role === 'coach' && item.notificationLabel && expandedBookingId === item.id}}"><text class="muted">{{item.notificationLabel}}</text><view class="error" wx:if="{{error && errorScope === 'sendReceipt' && errorId === item.id}}">{{error}}</view><button wx:if="{{item.canRetryNotification}}" class="secondary" data-id="{{item.id}}" bindtap="retryReceiptNotification" disabled="{{busy}}">重试微信通知</button></block>
       </view>
+      <button wx:if="{{bookingTotal > visibleBookings.length}}" class="secondary wide" bindtap="moreBookings">查看更多 · 已显示 {{visibleBookings.length}} / {{bookingTotal}}</button>
       </block>
+      <view wx:if="{{role === 'student'}}" class="subscription-prompt">
+        <view class="subscription-copy"><text class="subscription-title">不错过每一次训练</text><text class="muted">订阅预约、课前及扣费提醒</text></view>
+        <view class="subscription-actions"><button class="primary" data-kind="all" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">开启课程提醒</button></view>
+        <text wx:if="{{subscriptionMessage}}" class="subscription-result">{{subscriptionMessage}}</text>
+      </view>
     </block>
     <block wx:if="{{tab === 'schedule'}}">
       <view class="page-title">{{role === 'student' ? '为训练留个时间' : '一周课程安排'}}</view><text class="muted">{{role === 'student' ? '私教选时段，团课选已发布场次' : '按具体日期管理，已有预约的时段不可直接关闭'}}</text>
@@ -99,7 +103,7 @@
       <view class="empty" wx:if="{{!sessions.length}}">当天暂无已发布课程，请切换日期。</view>
       <view class="session-list {{kind === 'private' && role === 'student' ? 'slot-grid' : ''}}">
         <view class="card session" wx:for="{{sessions}}" wx:key="id">
-          <view class="row"><text class="time">{{role !== 'student' && kind !== 'group' ? item.dayLabel + ' ' : ''}}{{item.startLabel}}</text><text class="badge">{{item.kindName}}</text></view><text class="muted">至 {{item.endLabel}}</text>
+          <view class="session-time"><text class="time">{{item.startLabel}}–{{item.endLabel}}</text><text class="badge">{{item.kindName}}</text></view>
           <view class="title">{{item.title}}</view><text class="muted">{{item.coachName}} · {{item.roomId}}</text><text class="muted">{{item.cost}} 节课时 · 余 {{item.free}} / {{item.capacity}} 位</text>
           <button wx:if="{{role === 'student'}}" class="primary" disabled="{{!item.canBook || busy}}" data-id="{{item.id}}" bindtap="selectSession">{{item.canBook ? '选择时段' : '暂不可约'}}</button>
           <view wx:elif="{{item.canClose}}" class="row actions"><button class="secondary edit-slot" data-id="{{item.id}}" bindtap="editSlot" disabled="{{busy}}">编辑时段</button><button class="secondary" data-id="{{item.id}}" bindtap="closeSlot" disabled="{{busy}}">关闭时段</button></view>
@@ -147,9 +151,9 @@
         <view wx:for="{{filteredMembers}}" wx:key="id" class="card">
           <view class="row"><text class="title">{{item.name}}</text><text class="badge">{{item.isCoach ? '教练' : '学员'}}</text></view>
           <text class="muted">账号尾号 {{item.shortId}}</text>
-          <button class="secondary" data-id="{{item.id}}" bindtap="openMember" disabled="{{busy}}">{{item.isCoach ? '查看教练详情' : '查看学员详情'}}</button>
+          <view class="member-actions"><button class="secondary member-details" data-id="{{item.id}}" bindtap="openMember" disabled="{{busy}}">{{item.isCoach ? '查看教练详情' : '查看学员详情'}}</button>
+          <button class="secondary member-role-action" data-id="{{item.id}}" bindtap="setCoach" disabled="{{busy}}">{{item.isCoach ? '取消教练身份' : '设为教练'}}</button></view>
           <view class="error" wx:if="{{error && errorScope === 'setCoach' && errorId === item.id && !memberDetail}}">{{error}}</view>
-          <button class="{{item.isCoach ? 'secondary' : 'primary'}}" data-id="{{item.id}}" bindtap="setCoach" disabled="{{busy}}">{{item.isCoach ? '取消教练身份' : '设为教练'}}</button>
         </view>
         <view wx:if="{{!filteredMembers.length}}" class="empty">{{memberQuery ? '没有匹配结果，请调整搜索条件' : memberFilter === 'coach' ? '暂无教练，可在学员详情中设置教练身份' : '暂无已入会学员'}}</view>
         </block>
@@ -177,8 +181,29 @@
       <view class="notice">课时收入只统计已确认到课；爽约不计教练课时收入。储值充值按登记时的业绩归属计算，不限制授课教练；旧私教课包沿用原有分摊规则。</view>
     </block>
     <block wx:if="{{role === 'admin' && tab === 'finance'}}">
-      <view class="page-heading"><text class="page-kicker">门店账务 / FINANCE</text><view class="page-title">每一笔，都有记录</view><text class="muted">一次充值，私教与团课共用余额。</text></view>
-      <view class="card purchase-card">
+      <view class="page-heading"><view class="page-title">收款账务</view><text class="muted">登记线下收款，查看账户流水与教练明细。</text></view>
+      <view class="segments"><button data-section="recharge" bindtap="chooseFinanceSection" class="{{financeSection === 'recharge' ? 'selected' : ''}}">登记收款</button><button data-section="ledger" bindtap="chooseFinanceSection" class="{{financeSection === 'ledger' ? 'selected' : ''}}">账户流水</button><button data-section="income" bindtap="chooseFinanceSection" class="{{financeSection === 'income' ? 'selected' : ''}}">教练明细</button></view>
+      <block wx:if="{{financeSection === 'income' && adminFinance}}">
+        <view class="coach-income-group">
+        <view class="coach-section-head"><view><view class="section">今日收入</view><text class="muted">当日课时提成与业绩提成</text></view><text class="coach-period">今日</text></view>
+        <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-income-item">
+          <view class="row"><view class="coach-identity"><text class="coach-color-dot" style="background:{{item.color}}"></text><text class="title">{{item.name}}</text><text class="muted">{{item.employmentTypeName}}</text></view><text class="coach-income-total">{{item.todayTotalLabel}}</text></view>
+          <view class="coach-income-parts"><text>课时提成 <text>{{item.todayClassCommissionLabel}}</text></text><text>业绩提成 <text>{{item.todayPerformanceCommissionLabel}}</text></text></view>
+          <view class="coach-month-estimate"><text>本月工资预估</text><text>{{item.monthEstimatedTotalLabel}}</text></view>
+        </view>
+        <view wx:if="{{!adminFinance.coaches.length}}" class="empty">暂无教练工资数据</view>
+        </view>
+        <view class="coach-history-group">
+        <view class="coach-section-head"><view><view class="section">历史授课</view><text class="muted">按所选月份查看授课与消课</text></view><text class="coach-period">按月</text></view>
+        <picker range="{{adminHistoryMonths}}" range-key="label" value="{{adminHistoryMonthIndex}}" bindchange="chooseAdminHistoryMonth"><view class="coach-month-select"><text>查询月份</text><text>{{adminHistoryMonths[adminHistoryMonthIndex].label}} ▾</text></view></picker>
+        <view wx:for="{{adminFinance.coaches}}" wx:key="id" class="coach-history-card coach-history-summary" style="border-left:6rpx solid {{item.color}};background:{{item.background}}">
+          <view class="row"><text class="title">{{item.name}}</text><button class="compact secondary" data-id="{{item.id}}" bindtap="toggleAdminCoachHistory">授课明细 ›</button></view>
+          <view class="coach-history-metrics"><view><text>{{item.historyClassCount}}</text><text>已到课预约</text></view><view><text>{{item.historyStudentCount}}</text><text>到课学员</text></view><view><text>{{item.historyRevenueLabel}}</text><text>消课金额</text></view></view>
+        </view>
+        <text class="finance-note">消课金额包含到课与爽约结算，是学员消费金额，不是教练工资。</text>
+        </view>
+</block>
+      <view wx:if="{{financeSection === 'recharge'}}" class="card purchase-card">
         <view class="form-section-head"><text class="step-number">01</text><view><view class="title">选择充值学员</view><text class="muted">充值金额存入该学员的通用余额</text></view></view>
         <text class="field-label">学员</text>
         <picker range="{{users}}" range-key="name" value="{{memberIndex}}" bindchange="chooseMember"><view class="picker field-select"><text>{{users[memberIndex].name || '暂无已审核学员'}}</text><text class="field-arrow">›</text></view></picker>
@@ -186,12 +211,8 @@
         <view class="form-section-head form-divider"><text class="step-number">02</text><view><view class="title">登记收款</view><text class="muted">收款方式：转账</text></view></view>
         <view class="purchase-form">
           <text class="field-label">实收充值金额 / 元</text><input class="purchase-amount" name="amount" type="digit" value="{{purchaseAmount}}" bindinput="editPurchaseAmount" placeholder="如 4400.00" disabled="{{busy}}"/>
-          <view class="form-columns"><view class="form-field"><text class="field-label">本学员私教单价 / 元</text><input class="private-price" name="privatePrice" type="digit" value="{{privatePrice}}" bindinput="editPrivatePrice" placeholder="如 220.00" disabled="{{busy}}"/></view><view class="form-field"><text class="field-label">本学员团课单价 / 元</text><input class="group-price" name="groupPrice" type="digit" value="{{groupPrice}}" bindinput="editGroupPrice" placeholder="如 100.00" disabled="{{busy}}"/></view></view>
-
-
-          <text class="price-help">设置本学员已购账户的私教、团课单价，预约时按课程类型冻结金额。充值不折算课时，也不限制授课教练。</text>
-          <view class="price-adjust-panel"><view><text class="field-label">调整后续课程单价</text><text class="muted">已使用、已到课和已预约锁价的金额都不会改变；保存后仅新预约使用新单价。</text></view><button class="secondary compact" bindtap="saveSelectedMemberPrices" loading="{{busy && errorScope === 'setMemberPrices'}}" disabled="{{busy || !users.length}}">保存新单价</button></view>
-          <view wx:if="{{error && errorScope === 'setMemberPrices'}}" class="error">{{error}}</view>
+          <view class="notice"><text class="muted">当前课程单价</text><view>私教 {{privatePrice || '未设置'}} / 团课 {{groupPrice || '未设置'}} 元</view><button class="secondary compact" data-id="{{users[memberIndex].id}}" bindtap="openMember" disabled="{{busy || !users.length}}">在学员详情中调整价格 ›</button></view>
+          <text wx:if="{{!privatePrice || !groupPrice}}" class="muted">首次充值前，请先在学员详情中保存私教与团课单价。</text>
           <text class="field-label">有效期至</text><picker mode="date" start="{{today}}" end="2099-12-31" value="{{purchaseExpiry || today}}" bindchange="choosePurchaseExpiry" disabled="{{busy}}"><view class="picker field-select"><text class="{{purchaseExpiry ? '' : 'field-placeholder'}}">{{purchaseExpiry || '选择到期日期'}}</text><text class="field-arrow">›</text></view></picker>
           <text class="field-label">收款凭据 / 备注</text><input class="purchase-note" name="note" value="{{purchaseNote}}" bindinput="editPurchaseNote" maxlength="200" disabled="{{busy}}" placeholder="填写转账凭据或备注（必填）"/>
           <view class="error" wx:if="{{error && errorScope === 'recharge'}}">{{error}}</view>
@@ -199,13 +220,22 @@
           <text class="form-footnote">续充累加同一余额，有效期取较晚日期；到期余额续充后可继续使用。</text>
         </view>
       </view>
-      <view class="section">账户流水</view><view class="ledger" wx:for="{{ledger}}" wx:key="id"><view><text>{{item.title}}</text><text class="muted">{{item.date}}</text></view><view class="muted">可用 {{item.availableLabel}} / 冻结 {{item.frozenLabel}} / 消耗 {{item.consumedLabel}}</view></view>
-      <view wx:if="{{!ledger.length}}" class="empty">暂无课时变动记录</view>
+      <block wx:if="{{financeSection === 'ledger'}}">
+      <view class="ledger-filters">
+        <picker range="{{ledgerMembers}}" range-key="name" value="{{ledgerMemberIndex}}" bindchange="filterLedgerMember"><view class="picker"><text class="filter-label">学员</text><view>{{ledgerMembers[ledgerMemberIndex].name}} ▾</view></view></picker>
+        <view class="ledger-filter-pair"><picker range="{{ledgerMonths}}" range-key="name" value="{{ledgerMonthIndex}}" bindchange="filterLedgerMonth"><view class="picker"><text class="filter-label">月份</text><view>{{ledgerMonths[ledgerMonthIndex].name}} ▾</view></view></picker><picker range="{{ledgerTypes}}" range-key="name" value="{{ledgerTypeIndex}}" bindchange="filterLedgerType"><view class="picker"><text class="filter-label">类型</text><view>{{ledgerTypes[ledgerTypeIndex].name}} ▾</view></view></picker></view>
+      </view>
+      <view class="row"><text class="muted">匹配 {{adminLedger.length}} 条已加载流水</text><button class="compact secondary" bindtap="resetLedgerFilters">重置筛选</button></view>
+      <text class="ledger-scope">以下金额为本次变动，不是账户余额。筛选仅覆盖当前已加载记录。</text>
+      <view class="admin-ledger-row" wx:for="{{adminLedger}}" wx:key="id"><view class="row"><text class="title">{{item.memberName}}</text><text class="badge">{{item.title}}</text></view><text class="muted">{{item.date}} · 账号 {{item.shortId}}</text><view class="ledger-deltas"><view><text>可用变动</text><text>{{item.available}}</text></view><view><text>冻结变动</text><text>{{item.frozen}}</text></view><view><text>消费变动</text><text>{{item.consumed}}</text></view></view></view>
+      <view wx:if="{{!adminLedger.length}}" class="empty">暂无匹配流水，请调整筛选条件。</view>
+      </block>
     </block>
-    <block wx:if="{{tab === 'messages' || (role === 'admin' && tab === 'home')}}"><view class="page-title">消息通知</view><text class="muted">预约变更与消课记录保存在这里。</text>
+    <block wx:if="{{tab === 'messages' && role !== 'admin'}}"><view class="page-title">消息通知</view><text class="muted">预约变更与消课记录保存在这里。</text>
       <view wx:if="{{role === 'student'}}" class="card"><view class="title">微信课程通知</view><text class="muted">可订阅预约成功、预约取消及课前 2 小时提醒；不足 2 小时预约时尽快提醒。消课通知单独订阅。每类通知都需要可用订阅次数，拒绝订阅不影响约课和站内消息。</text><button class="primary" data-kind="booking" bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">订阅预约与上课提醒</button><button bindtap="enableReceiptNotification" loading="{{subscribingReceipt}}" disabled="{{subscribingReceipt}}">订阅消课提醒</button><text wx:if="{{subscriptionMessage}}" class="notice">{{subscriptionMessage}}</text></view>
       <view wx:for="{{messages}}" wx:key="id" class="card"><view class="title">{{item.title}}</view><view wx:if="{{item.detail}}" class="receipt-detail">{{item.detail}}</view><text class="muted">{{item.date}}</text></view><view wx:if="{{!messages.length}}" class="empty">暂无消息</view></block>
   </block>
+  <view wx:if="{{profile && profile.status === 'active'}}" class="workspace-nav" role="tablist" aria-label="主功能导航"><button wx:for="{{navItems}}" wx:key="id" class="{{tab === item.id ? 'on' : ''}}" data-tab="{{item.id}}" bindtap="switchTab" disabled="{{busy}}" role="tab" aria-selected="{{tab === item.id}}">{{item.name}}</button></view>
 </view>
 <view wx:if="{{selectedId}}" class="overlay"><view class="sheet"><view class="row"><text class="page-title">确认预约</text><button class="compact secondary" bindtap="dismiss">关闭</button></view><view class="title">{{selectedTitle}}</view><text class="schedule">{{selectedTime}}</text><picker wx:if="{{eligible.length}}" range="{{eligible}}" range-key="label" value="{{packageIndex}}" bindchange="choosePackage"><view class="picker">{{eligible[packageIndex].label}} ›</view></picker><text class="muted" wx:else>可用余额不足、价格未设置或账户已到期，请联系门店。</text><view class="notice">本次冻结 {{eligible[packageIndex].freezeLabel || '—'}}，开课前 {{selectedCancel}} 小时可自助取消。确认时可同时开启微信课程提醒，拒绝不影响预约。</view><button class="primary" bindtap="confirmBook" loading="{{subscribingReceipt || busy}}" disabled="{{!eligible.length || busy || subscribingReceipt}}">确认预约 · 冻结 {{eligible[packageIndex].freezeLabel || '—'}}</button></view></view>
 
@@ -232,7 +262,7 @@
   <view class="card" wx:for="{{coachMember.records}}" wx:key="id"><view class="row"><text class="title">{{item.title}}</text><text class="badge booking-status status-{{item.statusCode}}">{{item.status}}</text></view><text class="schedule">{{item.schedule}}</text><text class="muted">{{item.cost}} 节课时<text wx:if="{{item.amount}}"> · {{item.status === '待上课' ? '预计扣款' : '扣款'}} {{item.amount}}</text></text></view>
   <view wx:if="{{!coachMember.records.length}}" class="empty">暂无相关授课记录</view>
 </view></scroll-view></view>
-<view wx:if="{{role === 'admin' && memberDetail}}" class="overlay"><scroll-view scroll-y class="sheet member-sheet {{memberDetail.isCoach ? 'coach-detail-sheet' : ''}}"><view class="sheet-content">
+<view wx:if="{{role === 'admin' && memberDetail}}" class="overlay"><scroll-view scroll-y class="sheet member-sheet dense-member-sheet {{memberDetail.isCoach ? 'coach-detail-sheet' : ''}}"><view class="sheet-content">
   <view class="row"><text class="page-title">{{memberDetail.name}}</text><button class="secondary compact" bindtap="closeMember">关闭</button></view>
   <text class="muted">账号尾号 {{memberDetail.shortId}} · {{memberDetail.isCoach ? '教练 / 学员' : '学员'}}</text>
   <view class="member-account-section">

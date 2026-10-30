@@ -2,6 +2,9 @@ import { api, Dashboard, Role, Session, Pack } from '../../services/api';
 import { config } from '../../config';
 import { subscribeReceipt, sendReceiptNotification } from '../../services/receipt-notification';
 import { positiveMoneyFen } from '../../services/purchase-price';
+import { bookingList } from '../../services/booking-list';
+import { coachColor } from '../../services/coach-history';
+import { ledgerList, ledgerTypes } from '../../services/ledger-list';
 
 const dayKey = (n: number) => new Date(n + 8 * 3600000).toISOString().slice(0, 10);
 const time = (n: number) => new Date(n + 8 * 3600000).toISOString().slice(11, 16);
@@ -40,6 +43,9 @@ let dragAnchor = -1; let dragCurrent = -1;
 let dragRects: { top: number; bottom: number; left: number; right: number; dataset?: { index?: string | number } }[] = [];
 Page({
   data: {
+    ledgerMemberId: '', ledgerMonth: '', ledgerType: '', ledgerMemberIndex: 0, ledgerMonthIndex: 0, ledgerTypeIndex: 0,
+    ledgerMembers: [{ id: '', name: '全部学员' }], ledgerMonths: [{ id: '', name: '全部月份' }], ledgerTypes, adminLedger: [] as ReturnType<typeof ledgerList>['rows'],
+    bookingFilter: 'upcoming', bookingLimit: 3, visibleBookings: [] as object[], bookingTotal: 0, expandedBookingId: '', financeSection: 'recharge',
     demo: config.mode === 'demo', role: 'student' as Role, roleName: '学员端', roles: [] as { id: Role; name: string }[],
     tab: 'home', subscribingReceipt: false, subscriptionMessage: '', busy: false, error: '', errorScope: 'load', errorId: '', profile: null as Dashboard['profile'], today: dayKey(Date.now()), registrationBirthday: '',
     navItems: navigation.student, todayClasses: 0, unsettledCount: 0, coachRoster: [] as { id: string; name: string }[],
@@ -121,7 +127,7 @@ Page({
     const dayCopySlots = all.filter(s => s.kind === 'private' && s.status === 'open' && s.coachId === copyCoach && dayKey(s.start) === (this.data.copySourceDay || this.data.day));
     this.setData({ copyDayCount: dayCopySlots.filter(canCopy).length, copyDayWarning: copyWarning(dayCopySlots), copyWeekWarning: copyWarning(copySlots) });
     this.setData({ scheduleSlots, weekScheduleDays, copyCount: copySlots.filter(canCopy).length, copyEnd: dayKey(sourceStart + 6 * 86400000), copyTarget: dayKey(sourceStart + 7 * 86400000), copyTargetEnd: dayKey(sourceStart + 13 * 86400000), copyUnavailable: all.length >= 200 });
-    const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, notificationLabel: notificationLabels[b.notificationState || ''] || '', canRetryNotification: ['pending', 'failed', 'needs_subscription'].includes(b.notificationState || ''), statusClass: `status-${b.status}`, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), unitPriceLabel: b.unitPriceFen === undefined ? '' : money(b.unitPriceFen), settleAmountLabel: b.settleAmountFen === undefined ? '' : money(b.settleAmountFen), totalAmountLabel: b.totalAmountFen === undefined ? '' : money(b.totalAmountFen), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
+    const bookings = (snapshot.bookings || []).filter(b => this.data.role === 'student' ? b.memberId === profile?.id : this.data.role === 'coach' ? all.some(s => s.id === b.sessionId && s.coachId === profile?.id) : true).map(b => { const s = all.find(s => s.id === b.sessionId); return { ...b, start: s?.start || 0, coachName: coaches.find(c => c.id === s?.coachId)?.name || '\u6559\u7ec3', notificationLabel: notificationLabels[b.notificationState || ''] || '', canRetryNotification: ['pending', 'failed', 'needs_subscription'].includes(b.notificationState || ''), statusClass: `status-${b.status}`, title: s?.title || '历史课程', schedule: s ? `${dayKey(s.start)} ${time(s.start)}–${time(s.end)}` : '', cancelReason: b.cancelReason || '', statusName: b.status === 'cancelled' && b.cancelReason ? '门店停课' : statuses[b.status] || b.status, memberName: [...(snapshot.users || []), ...(snapshot.roster || [])].find(u => u.id === b.memberId)?.name || b.memberId.slice(-6), unitPriceLabel: b.unitPriceFen === undefined ? '' : money(b.unitPriceFen), settleAmountLabel: b.settleAmountFen === undefined ? '' : money(b.settleAmountFen), totalAmountLabel: b.totalAmountFen === undefined ? '' : money(b.totalAmountFen), canCancel: b.status === 'confirmed' && !!s && s.start - now >= s.cancelHours * 3600000, canSettle: b.status === 'confirmed' && !!s && s.end <= now }; });
     const pay = snapshot.coachPay;
     const coachPay: CoachPayView | null = this.data.role === 'coach' && pay ? {
       employmentTypeName: pay.employmentType === 'fullTime' ? '全职' : '兼职', month: pay.month,
@@ -141,7 +147,7 @@ Page({
       coaches: finance.coaches.map(item => {
         const rawRecords = (finance.teachingHistory || []).filter(record => record.coachId === item.id && record.month === historyMonth);
         const attended = rawRecords.filter(record => record.status === 'attended');
-        return { id: item.id, name: item.name, employmentTypeName: item.employmentType === 'fullTime' ? '全职' : '兼职',
+        return { ...coachColor(item.id), id: item.id, name: item.name, employmentTypeName: item.employmentType === 'fullTime' ? '全职' : '兼职',
           todayClassCommissionLabel: money(item.todayClassCommissionFen), todayPerformanceCommissionLabel: money(item.todayPerformanceCommissionFen),
           todayTotalLabel: money(item.todayTotalFen), monthEstimatedTotalLabel: money(item.monthEstimatedTotalFen),
           historyClassCount: new Set(attended.map(record => record.id)).size, historyStudentCount: new Set(attended.map(record => record.memberId)).size,
@@ -152,11 +158,21 @@ Page({
     } : null;
     const rosterIds = new Set(bookings.map(b => b.memberId));
     this.setData({ coachPay, adminFinance, adminHistoryMonth: historyMonth, adminHistoryMonthIndex: Math.max(0, historyMonthValues.indexOf(historyMonth)), adminHistoryMonths: historyMonths, todayClasses: all.filter(s => s.status === 'open' && dayKey(s.start) === dayKey(now) && (this.data.role === 'admin' || s.coachId === profile?.id)).length, unsettledCount: bookings.filter(b => b.canSettle).length, coachRoster: [...(snapshot.users || []), ...(snapshot.roster || [])].filter(u => rosterIds.has(u.id)).filter((u, i, list) => list.findIndex(v => v.id === u.id) === i).map(u => ({ id: u.id, name: u.name })) });
+    const list = bookingList(bookings, this.data.role, this.data.bookingFilter, this.data.bookingLimit, dayKey(now));
+    this.setData({ visibleBookings: list.rows, bookingTotal: list.total });
+    if (this.data.role === 'admin' && this.data.tab === 'finance') this.loadMemberPrices();
     const packs = (snapshot.packages || []).filter(p => p.kind !== 'wallet' && (this.data.role === 'admin' || p.memberId === profile?.id));
     const wallet = (snapshot.packages || []).find(p => p.kind === 'wallet' && p.memberId === profile?.id);
     this.setData({ wallet: wallet ? walletView(wallet) : null, ownPrivatePrice: profile?.prices?.private ? money(profile.prices.private) : '未设置', ownGroupPrice: profile?.prices?.group ? money(profile.prices.group) : '未设置' });
     const messages = (snapshot.inbox || []).filter(m => this.data.role === 'admin' || m.userId === profile?.id);
     const visibleLedger = (snapshot.ledger || []).filter(l => this.data.role === 'admin' || l.memberId === profile?.id);
+    if (this.data.role === 'admin') {
+      let result = ledgerList(visibleLedger, snapshot.users || [], this.data.ledgerMemberId, this.data.ledgerMonth, this.data.ledgerType);
+      const memberId = result.members.some(m => m.id === this.data.ledgerMemberId) ? this.data.ledgerMemberId : '';
+      const month = result.months.some(m => m.id === this.data.ledgerMonth) ? this.data.ledgerMonth : '';
+      if (memberId !== this.data.ledgerMemberId || month !== this.data.ledgerMonth) result = ledgerList(visibleLedger, snapshot.users || [], memberId, month, this.data.ledgerType);
+      this.setData({ ledgerMemberId: memberId, ledgerMonth: month, ledgerMembers: result.members, ledgerMonths: result.months, adminLedger: result.rows, ledgerMemberIndex: result.members.findIndex(m => m.id === memberId), ledgerMonthIndex: result.months.findIndex(m => m.id === month) });
+    } else this.setData({ adminLedger: [], ledgerMembers: [{ id: '', name: '全部学员' }], ledgerMonths: [{ id: '', name: '全部月份' }] });
     this.setData({ sessions, bookings, myCount: bookings.filter(b => b.status === 'confirmed').length, packs: packs.map(p => ({ ...p, title: p.kind === 'private' ? '私教课包' : '团课课包', expiry: dayKey(p.expiresAt), expired: p.expiresAt < now })), totalAvailable: packs.filter(p => p.expiresAt >= now).reduce((a, p) => a + p.available, 0), totalFrozen: packs.reduce((a, p) => a + p.frozen, 0), totalConsumed: packs.reduce((a, p) => a + p.consumed, 0), messages: messages.sort((a, b) => b.at - a.at).map(m => ({ ...m, date: `${dayKey(m.at)} ${time(m.at)}` })), ledger: visibleLedger.sort((a, b) => b.at - a.at).map(l => ({ ...l, title: ({ migration: '旧课包转入余额', purchase: '购课入账', freeze: '预约冻结', release: '取消释放', consume: '出勤消课' } as Record<string, string>)[l.type] || l.type, date: dayKey(l.at), availableLabel: l.unit === 'fen' ? money(l.delta.available) : `${l.delta.available} 节`, frozenLabel: l.unit === 'fen' ? money(l.delta.frozen) : `${l.delta.frozen} 节`, consumedLabel: l.unit === 'fen' ? money(l.delta.consumed) : `${l.delta.consumed} 节` })) });
   },
   renderMembers() {
@@ -197,18 +213,30 @@ Page({
     this.setData({ coachMember: { ...member, shortId: id.slice(-6), records } });
   },
   closeMember() { this.setData({ memberDetailId: '', memberDetail: null, memberPacks: [], memberBookings: [], coachMember: null }); },
-  switchRole(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const role = e.currentTarget.dataset.role as Role; if (role === this.data.role || !this.data.roles.some(r => r.id === role)) return; this.closeMember(); this.setData({ role, roleName: roleNames[role], navItems: navigation[role], tab: 'home', kind: role === 'coach' ? 'private' : this.data.kind, selectedId: '', editing: null }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); if (!this.data.demo && snapshot.profile?.id === this.data.profile?.id && snapshotLoadedAt > 0 && Date.now() - snapshotLoadedAt < SWITCH_CACHE_MS) { this.setData({ error: '' }); this.applySnapshot(); } else { this.refresh(); } },
+  switchRole(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const role = e.currentTarget.dataset.role as Role; if (role === this.data.role || !this.data.roles.some(r => r.id === role)) return; this.closeMember(); this.setData({ bookingFilter: 'upcoming', bookingLimit: role === 'coach' ? 10 : 3, expandedBookingId: '', role, roleName: roleNames[role], navItems: navigation[role], tab: 'home', kind: role === 'coach' ? 'private' : this.data.kind, selectedId: '', editing: null }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); if (!this.data.demo && snapshot.profile?.id === this.data.profile?.id && snapshotLoadedAt > 0 && Date.now() - snapshotLoadedAt < SWITCH_CACHE_MS) { this.setData({ error: '' }); this.applySnapshot(); } else { this.refresh(); } },
   switchTab(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const tab = String(e.currentTarget.dataset.tab); if (!navigation[this.data.role].some(item => item.id === tab)) return; this.closeMember(); this.setData({ tab, selectedId: '', editing: null, error: '' }); if (tab === 'finance') this.loadMemberPrices(); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); },
   chooseAdminHistoryMonth(e: WechatMiniprogram.PickerChange) {
     const index = Number(e.detail.value); const month = this.data.adminHistoryMonths[index]?.value;
     if (!month) return; this.setData({ adminHistoryMonth: month, adminHistoryMonthIndex: index, adminCoachDetailId: '' }); this.renderData();
   },
   toggleAdminCoachHistory(e: WechatMiniprogram.TouchEvent) {
-    const id = String(e.currentTarget.dataset.id); this.setData({ adminCoachDetailId: this.data.adminCoachDetailId === id ? '' : id });
+    if (this.data.role !== 'admin' || this.data.busy) return;
+    const id = String(e.currentTarget.dataset.id);
+    if (!this.data.adminFinance?.coaches.some(c => c.id === id)) return;
+    wx.navigateTo({ url: `/pages/coach-history/index?id=${encodeURIComponent(id)}&month=${encodeURIComponent(this.data.adminHistoryMonth)}` });
   },
   chooseDay(e: WechatMiniprogram.TouchEvent) { this.setData({ day: String(e.currentTarget.dataset.day) }); this.renderData(); },
   chooseScheduleDate(e: WechatMiniprogram.PickerChange) { this.setData({ day: String(e.detail.value) }); this.renderData(); },
+  chooseBookingFilter(e: WechatMiniprogram.TouchEvent) { if (this.data.busy) return; const filter = String(e.currentTarget.dataset.filter); if (!['upcoming', 'today', 'settle', 'completed', 'cancelled'].includes(filter)) return; this.setData({ bookingFilter: filter, bookingLimit: 10, expandedBookingId: '' }); this.renderData(); },
+  moreBookings() { this.setData({ bookingLimit: this.data.bookingLimit + 10 }); this.renderData(); },
+  toggleBooking(e: WechatMiniprogram.TouchEvent) { const id = String(e.currentTarget.dataset.id); this.setData({ expandedBookingId: this.data.expandedBookingId === id ? '' : id }); },
+  chooseFinanceSection(e: WechatMiniprogram.TouchEvent) { if (this.data.busy || this.data.role !== 'admin') return; const section = String(e.currentTarget.dataset.section); if (!['recharge', 'ledger', 'income'].includes(section)) return; this.setData({ tab: 'finance', financeSection: section }); this.loadMemberPrices(); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); },
+  openPending() { if (this.data.busy) return; this.setData({ tab: 'account', memberSection: 'pending' }); wx.pageScrollTo({ scrollTop: 0, duration: 0 }); },
   chooseKind(e: WechatMiniprogram.TouchEvent) { this.setData({ kind: String(e.currentTarget.dataset.kind) }); this.renderData(); },
+  filterLedgerMember(e: WechatMiniprogram.PickerChange) { if (this.data.role !== 'admin') return; this.setData({ ledgerMemberId: this.data.ledgerMembers[Number(e.detail.value)]?.id || '' }); this.renderData(); },
+  filterLedgerMonth(e: WechatMiniprogram.PickerChange) { if (this.data.role !== 'admin') return; this.setData({ ledgerMonth: this.data.ledgerMonths[Number(e.detail.value)]?.id || '' }); this.renderData(); },
+  filterLedgerType(e: WechatMiniprogram.PickerChange) { if (this.data.role !== 'admin') return; const index = Number(e.detail.value); this.setData({ ledgerType: ledgerTypes[index]?.id || '', ledgerTypeIndex: index }); this.renderData(); },
+  resetLedgerFilters() { this.setData({ ledgerMemberId: '', ledgerMonth: '', ledgerType: '', ledgerTypeIndex: 0 }); this.renderData(); },
   chooseCoach(e: WechatMiniprogram.PickerChange) { this.setData({ coachIndex: Number(e.detail.value) }); this.renderData(); },
   chooseMember(e: WechatMiniprogram.PickerChange) { this.setData({ memberIndex: Number(e.detail.value) }); this.loadMemberPrices(); },
   loadMemberPrices() {

@@ -1,0 +1,12 @@
+.history-page{padding:28rpx 28rpx calc(36rpx + env(safe-area-inset-bottom));}
+.history-summary{padding:28rpx;border-left:6rpx solid;border-radius:20rpx;}
+.history-name{display:flex;align-items:center;gap:14rpx;font-size:36rpx;font-weight:800;margin-bottom:10rpx;}
+.color-dot{width:18rpx;height:18rpx;border-radius:50%;flex-shrink:0;}
+.history-metrics{display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:12rpx;margin-top:24rpx;}
+.history-metrics text{display:block;font-size:21rpx;color:#636971;margin-top:6rpx;}
+.history-metrics text:first-child{font-size:32rpx;font-weight:700;color:#252629;overflow-wrap:anywhere;}
+.history-record{background:#fff;padding:24rpx;margin-top:16rpx;border-radius:16rpx;border:1rpx solid #e4e7eb;}
+.record-name,.record-amount{font-size:28rpx;font-weight:700;overflow-wrap:anywhere;}
+.record-time{font-size:25rpx;margin:14rpx 0;font-weight:600;}
+.record-status{flex-shrink:0;font-size:21rpx;color:#636971;}
+.history-record .muted{font-size:22rpx;}

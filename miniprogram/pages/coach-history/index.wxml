@@ -1,0 +1,19 @@
+<view class="history-page">
+  <view wx:if="{{busy}}" class="empty">正在加载授课记录…</view>
+  <view wx:if="{{error}}" class="error">{{error}}<button bindtap="refresh">重新加载</button></view>
+  <block wx:if="{{detail}}">
+    <view class="history-summary" style="border-color:{{detail.color}};background:{{detail.background}}">
+      <view class="history-name"><text class="color-dot" style="background:{{detail.color}}"></text>{{detail.name}}</view>
+      <text class="muted">{{detail.month}} · 历史授课</text>
+      <view class="history-metrics"><view><text>{{detail.count}}</text><text>已到课预约</text></view><view><text>{{detail.students}}</text><text>到课学员</text></view><view><text>{{detail.amount}}</text><text>消课金额</text></view></view>
+    </view>
+    <view class="section">结算记录 · {{detail.records.length}} 条</view>
+    <text class="muted">按课程时间倒序；消课金额包含到课与爽约结算，不代表教练工资。</text>
+    <view wx:if="{{!detail.records.length}}" class="empty">该月暂无已结算授课记录</view>
+    <view wx:for="{{detail.records}}" wx:key="id" class="history-record">
+      <view class="row"><text class="record-name">{{item.memberName}}</text><text class="record-amount">{{item.amount}}</text></view>
+      <view class="record-time">{{item.date}} · {{item.time}}</view>
+      <view class="row"><text class="muted">{{item.title}} · {{item.kind}}</text><text class="record-status">{{item.status}}</text></view>
+    </view>
+  </block>
+</view>

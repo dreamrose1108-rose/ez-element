@@ -5,7 +5,7 @@ if (process.argv.includes('--production')) {
   const project = JSON.parse(await readFile('project.config.json', 'utf8'));
   if (!/mode:\s*'cloud'/.test(config) || !/envId:\s*'[^']+'/.test(config) || !/loginUrl:\s*'https:\/\/[^'\s]+'/.test(config) || !/^wx[0-9a-f]{16}$/.test(project.appid) || project.setting.urlCheck !== true) throw new Error('正式构建要求真实 AppID、cloud 模式、环境 ID、HTTPS 登录地址和开启域名校验');
 }
-for (const path of ['app', 'pages/workspace/index']) await build({ entryPoints: [`miniprogram/${path}.ts`], outfile: `miniprogram/${path}.js`, platform: 'neutral', mainFields: ['main', 'module'], target: 'es2020', format: 'cjs', bundle: true, minify: true });
+for (const path of ['app', 'pages/workspace/index', 'pages/coach-history/index']) await build({ entryPoints: [`miniprogram/${path}.ts`], outfile: `miniprogram/${path}.js`, platform: 'neutral', mainFields: ['main', 'module'], target: 'es2020', format: 'cjs', bundle: true, minify: true });
 const root = JSON.parse(await readFile('package.json', 'utf8'));
 for (const [name, entry, dependencies] of [
   ['api', 'server/entry.ts', root.dependencies],
